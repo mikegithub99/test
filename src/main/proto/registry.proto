@@ -1,0 +1,20 @@
+syntax = "proto3";
+option java_multiple_files = true;
+option java_package = "com.example.registry.grpc";
+option java_outer_classname = "GrpcServiceRegistryProto";
+package registry;
+service GrpcServiceRegistry {
+  rpc Register(RegisterRequest) returns (RegisterResponse);
+  rpc Unregister(UnregisterRequest) returns (UnregisterResponse);
+  rpc Lookup(LookupRequest) returns (LookupResponse);
+  rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+}
+message RegisterRequest { string service_name = 1; string instance_id = 2; string host = 3; int32 port = 4; int64 ttl_seconds = 5; }
+message RegisterResponse { bool success = 1; string message = 2; }
+message UnregisterRequest { string service_name = 1; string instance_id = 2; }
+message UnregisterResponse { bool success = 1; }
+message LookupRequest { string service_name = 1; repeated string excluded_instance_ids = 2; }
+message LookupResponse { ServiceInstance instance = 1; }
+message ServiceInstance { string service_name = 1; string instance_id = 2; string host = 3; int32 port = 4; }
+message HeartbeatRequest { string service_name = 1; string instance_id = 2; }
+message HeartbeatResponse { bool success = 1; }

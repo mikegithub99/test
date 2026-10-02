@@ -310,63 +310,6 @@ Lookup -> customer-1
 
 Because normal calls use the active cached client, the system does not perform registry/static discovery on every RPC.
 
-## 7. C++ service registration
-
-A C++17 service creates a `ServiceProvider` after starting its normal gRPC server:
-
-```cpp
-auto registry_channel =
-    grpc::CreateChannel(
-        "127.0.0.1:9090",
-        grpc::InsecureChannelCredentials());
-
-grpcdiscovery::ServiceProvider provider(
-    registry_channel,
-    "CUSTOMER_SERVICE",
-    "customer-1",
-    "127.0.0.1",
-    50051,
-    30);
-
-provider.start();
-```
-
-The process then owns the registration lifecycle:
-
-```text
-start
-  |
-  +-- Register
-  |
-  +-- Heartbeat every ~TTL/3
-  |
-  +-- normal shutdown -> Unregister
-```
-
-Build the C++ provider with:
-
-```bash
-cmake -S cpp -B cpp/build
-cmake --build cpp/build -j
-```
-
-The C++ provider uses the shared `src/main/proto/registry.proto`.
-
-## 8. Multiple C++ instances
-
-Run multiple processes with unique instance IDs:
-
-```text
-CUSTOMER_SERVICE
-  customer-1 -> 127.0.0.1:50051
-  customer-2 -> 127.0.0.1:50052
-  customer-3 -> 127.0.0.1:50053
-```
-
-Same-host/different-port instances are supported.
-
-Instance IDs should remain unique for a logical service.
-
 ## 9. Adding another service
 
 The same infrastructure can be reused for another API:
@@ -521,7 +464,105 @@ Do not shut down a cached channel merely because one RPC failed. A channel can b
 
 A discovered channel is tied to the service-specific adapter created with it: CustomerGrpcClient is constructed with that ManagedChannel, and its generated CustomerServiceBlockingStub uses the same channel. On a retryable exception, the manager removes and invalidates the failed GrpcClient, shuts down its old channel through the cache removal listener, performs a new discovery lookup excluding the failed instance, creates a new ManagedChannel, and calls CustomerGrpcClient::new with that new channel. The CustomerApi proxy remains the same; the client and channel underneath it are replaced.
 
-## 13. Kubernetes migration
+## 12. Channel creation and failover walkthrough
+
+The channel is created for a discovered service target, and the service-specific client is constructed on that channel. `CustomerGrpcClient::new` is effectively `channel -> new CustomerGrpcClient(channel)`.
+
+Initial call:
+
+```
+CustomerApi.getCustomer("123")
+        |
+        v
+JDK proxy
+        |
+        v
+GrpcClientManager.execute(...)
+        |
+        v
+ServiceDiscovery.lookup(...)
+        |
+        v
+customer-1 -> server-a:50051
+        |
+        v
+ManagedChannel #1
+        |
+        v
+CustomerGrpcClient #1
+        |
+        v
+CustomerServiceBlockingStub
+        |
+        v
+RPC
+```
+
+The manager caches that client as the active client for `CUSTOMER_SERVICE`. Subsequent calls reuse the client and channel. gRPC recommends reusing channels and stubs when possible. citeturn0search1
+
+When a retryable RPC exception such as `UNAVAILABLE` occurs:
+
+1. The manager catches the `StatusRuntimeException`.
+2. It removes the active `GrpcClient`.
+3. It invalidates the cache entry; the removal listener retires the old client and shuts down its channel.
+4. It performs fresh discovery while excluding the failed instance.
+5. Suppose discovery returns `customer-2 -> server-b:50051`.
+6. The manager creates `ManagedChannel #2`.
+7. `CustomerGrpcClient::new` receives channel #2 and creates a new generated stub on it.
+8. The original operation is retried using the new client.
+
+```
+OLD
+CustomerGrpcClient #1
+        |
+ManagedChannel #1
+        |
+customer-1
+        |
+   UNAVAILABLE
+        |
+        v
+invalidate + retire
+        |
+        v
+fresh lookup excluding customer-1
+        |
+        v
+NEW
+ManagedChannel #2
+        |
+CustomerGrpcClient #2
+        |
+customer-2
+        |
+retry original RPC
+```
+
+The application-facing `CustomerApi` proxy does not change. Only the client/channel resources underneath it are replaced.
+
+## 13. Multiple channels for the same logical service
+
+The current implementation intentionally maintains one active `GrpcClient` and one `ManagedChannel` per logical service name. It does not create one channel per Java type.
+
+A future channel pool could look like:
+
+```
+CUSTOMER_SERVICE
+       |
+   channel pool
+   /    |    \
+ #1    #2    #3
+ |     |     |
+pod A pod B pod C
+```
+
+Multiple channels can help when high concurrency or long-lived RPCs make a single HTTP/2 connection a bottleneck. gRPC documents separate channels or channel pools as options for these high-load cases. citeturn0search1
+
+The trade-offs are more connections, more keepalive/connection overhead, more memory, and more complex lifecycle, load distribution, failover, and observability.
+
+For this project, one active channel per logical service is the initial choice. If pooling becomes necessary, introduce an explicit transport-level channel pool rather than making `GrpcClientManager<T>` generic.
+
+## 14. Kubernetes migration
 
 A `GrpcClient` represents the connection resources for one discovered target:
 
@@ -576,7 +617,7 @@ The proxy, client manager and application APIs can remain unchanged.
 
 A Kubernetes implementation can resolve a Service DNS name and return a `ServiceTarget`. If exact pod-level exclusion is required, the Kubernetes discovery implementation needs endpoint-level information rather than only a normal Service DNS name.
 
-## 14. Production considerations
+## 15. Production considerations
 
 The checked-in reference implementation uses plaintext gRPC for local development.
 
@@ -594,7 +635,7 @@ For production deployments, add the application's standard:
 
 Do not use cache expiration as a substitute for service health detection. Cache lifecycle and service availability are separate concerns.
 
-## 15. Core design principle
+## 16. Core design principle
 
 The application should see:
 
@@ -615,3 +656,65 @@ Kubernetes
 ```
 
 The discovery implementation can change while the application-facing API, failover proxy and client lifecycle remain stable.
+
+# Section 2 — C++ service provider
+
+The C++17 side provides a small registration helper for backend services.
+
+## 2.1 Registration lifecycle
+
+A C++ service starts its normal gRPC server, creates a registry channel, registers its logical service name and instance ID, sends heartbeats, and unregisters during normal shutdown.
+
+```cpp
+auto registry_channel =
+    grpc::CreateChannel(
+        "127.0.0.1:9090",
+        grpc::InsecureChannelCredentials());
+
+grpcdiscovery::ServiceProvider provider(
+    registry_channel,
+    "CUSTOMER_SERVICE",
+    "customer-1",
+    "127.0.0.1",
+    50051,
+    30);
+
+provider.start();
+```
+
+Lifecycle:
+
+```
+start
+  |
+  +-- Register
+  |
+  +-- Heartbeat approximately every TTL/3
+  |
+  +-- normal shutdown -> Unregister
+```
+
+## 2.2 Multiple C++ instances
+
+```
+CUSTOMER_SERVICE
+    |
+    +-- customer-1 -> 127.0.0.1:50051
+    +-- customer-2 -> 127.0.0.1:50052
+    +-- customer-3 -> 127.0.0.1:50053
+```
+
+Same-host/different-port instances are supported.
+
+## 2.3 Build
+
+```bash
+cmake -S cpp -B cpp/build
+cmake --build cpp/build -j
+```
+
+The C++ provider uses the shared `src/main/proto/registry.proto`.
+
+## 2.4 Production considerations
+
+The checked-in example uses insecure/plaintext gRPC for local development. Production deployments should add TLS/mTLS, authentication and authorization, RPC deadlines, appropriate keepalive settings, logging, metrics/tracing, bounded retry policies, graceful shutdown, and registry access control.

@@ -1,0 +1,6 @@
+package com.example.grpc.simple;
+import io.grpc.Status; import io.grpc.StatusRuntimeException; import org.junit.jupiter.api.Test; import java.time.Duration; import java.util.concurrent.atomic.AtomicInteger; import static org.junit.jupiter.api.Assertions.*;
+class GrpcClientManagerTest {
+ @Test void retriesOnSameClient(){AtomicInteger creates=new AtomicInteger(),calls=new AtomicInteger();try(var m=new GrpcClientManager(n->ServiceEndpoint.hostPort(n,"customer-service",50051),3,Duration.ZERO)){String r=m.execute("CUSTOMER_SERVICE",ch->{creates.incrementAndGet();return new Object();},c->{if(calls.getAndIncrement()<2)throw new StatusRuntimeException(Status.UNAVAILABLE);return "ok";});assertEquals("ok",r);assertEquals(1,creates.get());assertEquals(3,calls.get());}}
+ @Test void doesNotRetryNonRetryable(){AtomicInteger calls=new AtomicInteger();try(var m=new GrpcClientManager(n->ServiceEndpoint.hostPort(n,"server-a",50051),3,Duration.ZERO)){assertThrows(StatusRuntimeException.class,()->m.execute("CUSTOMER_SERVICE",ch->new Object(),c->{calls.incrementAndGet();throw new StatusRuntimeException(Status.INVALID_ARGUMENT);}));assertEquals(1,calls.get());}}
+}

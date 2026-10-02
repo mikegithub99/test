@@ -1,47 +1,122 @@
 package com.example.discovery;
-import com.google.common.cache.*;
-import io.grpc.*;
+
+import com.google.common.cache.Cache;
+import com.google.common.cache.CacheBuilder;
+import com.google.common.cache.RemovalListener;
+import io.grpc.ManagedChannel;
+import io.grpc.ManagedChannelBuilder;
+import io.grpc.Status;
+import io.grpc.StatusRuntimeException;
+
+import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ConcurrentMap;
 import java.util.function.Function;
-public final class GrpcClientManager<T> implements AutoCloseable {
-  private final ServiceDiscovery discovery; private final GrpcClientFactory<T> factory;
-  private final Cache<String,GrpcClient<T>> cache;
-  private final ConcurrentMap<String,GrpcClient<T>> active=new ConcurrentHashMap<>();
-  private final ConcurrentMap<String,Object> locks=new ConcurrentHashMap<>();
-  public GrpcClientManager(ServiceDiscovery d,GrpcClientFactory<T> f,long maxSize){
-    discovery=d;factory=f;
-    cache=CacheBuilder.newBuilder().maximumSize(maxSize).removalListener((RemovalListener<String,GrpcClient<T>>)n->{if(n.getValue()!=null)n.getValue().retire();}).build();
-  }
-  public <R> R execute(String service,Function<T,R> op){
-    for(;;){
-      GrpcClient<T> c=getOrResolve(service,Set.of());
-      try{return op.apply(c.delegate());}
-      catch(StatusRuntimeException e){
-        if(!retryable(e.getStatus().getCode()))throw e;
-        active.remove(service,c); cache.invalidate(c.target().cacheKey());
-        replace(service,c.target().instanceId());
-      }
+
+public final class GrpcClientManager implements AutoCloseable {
+    private final ServiceDiscovery discovery;
+    private final Cache<String, GrpcClient> cache;
+    private final ConcurrentMap<String, GrpcClient> active = new ConcurrentHashMap<>();
+    private final ConcurrentMap<String, Object> locks = new ConcurrentHashMap<>();
+
+    public GrpcClientManager(ServiceDiscovery discovery, long maxSize) {
+        this.discovery = discovery;
+        this.cache = CacheBuilder.newBuilder()
+                .maximumSize(maxSize)
+                .removalListener((RemovalListener<String, GrpcClient>) notification -> {
+                    if (notification.getValue() != null) {
+                        notification.getValue().retire();
+                    }
+                })
+                .build();
     }
-  }
-  private GrpcClient<T> getOrResolve(String service,Set<String> excluded){
-    GrpcClient<T> c=active.get(service); if(c!=null)return c;
-    synchronized(locks.computeIfAbsent(service,k->new Object())){
-      c=active.get(service); if(c==null){c=create(discovery.lookup(service,excluded));active.put(service,c);} return c;
+
+    public <T, R> R execute(
+            String serviceName,
+            GrpcClientFactory<T> factory,
+            Function<T, R> operation) {
+
+        for (;;) {
+            GrpcClient client = getOrResolve(serviceName, factory, Set.of());
+
+            try {
+                return operation.apply(client.delegate());
+            } catch (StatusRuntimeException e) {
+                if (!retryable(e.getStatus().getCode())) {
+                    throw e;
+                }
+
+                active.remove(serviceName, client);
+                cache.invalidate(client.target().cacheKey());
+                replace(serviceName, factory, client.target().instanceId());
+            }
+        }
     }
-  }
-  private void replace(String service,String failedId){
-    synchronized(locks.computeIfAbsent(service,k->new Object())){
-      GrpcClient<T> c=active.get(service);
-      if(c!=null && !java.util.Objects.equals(c.target().instanceId(),failedId))return;
-      active.put(service,create(discovery.lookup(service,Set.of(failedId))));
+
+    private <T> GrpcClient getOrResolve(
+            String serviceName,
+            GrpcClientFactory<T> factory,
+            Set<String> excludedInstanceIds) {
+
+        GrpcClient client = active.get(serviceName);
+        if (client != null) {
+            return client;
+        }
+
+        synchronized (locks.computeIfAbsent(serviceName, ignored -> new Object())) {
+            client = active.get(serviceName);
+            if (client == null) {
+                client = create(discovery.lookup(serviceName, excludedInstanceIds), factory);
+                active.put(serviceName, client);
+            }
+            return client;
+        }
     }
-  }
-  private GrpcClient<T> create(ServiceTarget t){
-    ManagedChannel ch=ManagedChannelBuilder.forTarget(t.target()).usePlaintext().build();
-    GrpcClient<T> c=new GrpcClient<>(t,ch,factory.create(ch)); cache.put(t.cacheKey(),c); return c;
-  }
-  private static boolean retryable(Status.Code c){return c==Status.Code.UNAVAILABLE||c==Status.Code.DEADLINE_EXCEEDED||c==Status.Code.RESOURCE_EXHAUSTED;}
-  public void close(){active.values().forEach(GrpcClient::retire);active.clear();cache.invalidateAll();cache.cleanUp();}
+
+    private <T> void replace(
+            String serviceName,
+            GrpcClientFactory<T> factory,
+            String failedInstanceId) {
+
+        synchronized (locks.computeIfAbsent(serviceName, ignored -> new Object())) {
+            GrpcClient current = active.get(serviceName);
+
+            if (current != null
+                    && !Objects.equals(current.target().instanceId(), failedInstanceId)) {
+                return;
+            }
+
+            active.put(
+                    serviceName,
+                    create(
+                            discovery.lookup(serviceName, Set.of(failedInstanceId)),
+                            factory));
+        }
+    }
+
+    private <T> GrpcClient create(ServiceTarget target, GrpcClientFactory<T> factory) {
+        ManagedChannel channel = ManagedChannelBuilder
+                .forTarget(target.target())
+                .usePlaintext()
+                .build();
+
+        GrpcClient client = new GrpcClient(target, channel, factory.create(channel));
+        cache.put(target.cacheKey(), client);
+        return client;
+    }
+
+    private static boolean retryable(Status.Code code) {
+        return code == Status.Code.UNAVAILABLE
+                || code == Status.Code.DEADLINE_EXCEEDED
+                || code == Status.Code.RESOURCE_EXHAUSTED;
+    }
+
+    @Override
+    public void close() {
+        active.values().forEach(GrpcClient::retire);
+        active.clear();
+        cache.invalidateAll();
+        cache.cleanUp();
+    }
 }

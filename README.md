@@ -32,7 +32,7 @@ Spring Boot application
    |          |          ManagedChannel
 Registry    Static             |
    |          |                v
-   +----+-----+         generated gRPC stub
+   +----+-----+         service-specific adapter
         |
         v
   service instance
@@ -41,10 +41,12 @@ Registry    Static             |
 The important separation is:
 
 - `ServiceDiscovery` answers **where the service is**.
-- `GrpcClientManager` owns cached channels/clients and lifecycle.
+- `ServiceDiscovery` answers **where the service is**.
+- `GrpcClientManager` owns cached channels/clients and lifecycle. It is deliberately **not generic** and does not know about `CustomerApi`, `OrderApi`, or generated protobuf stub types.
+- `GrpcClientFactory<T>` is the only generic infrastructure type. It converts a `ManagedChannel` into the service-specific adapter, such as `CustomerGrpcClient`.
 - The JDK proxy owns **transparent retry/failover behavior**.
-- A service-specific adapter such as `CustomerGrpcClient` owns the generated gRPC stub and maps it to the application API.
-- Application code depends only on `CustomerApi`.
+- A service-specific adapter owns the generated gRPC stub and maps it to the application API.
+- Application code depends only on `CustomerApi` or another application-facing interface.
 
 ## Repository layout
 
@@ -183,23 +185,20 @@ The cleaner production pattern is to create the manager with a factory and expos
 public class CustomerGrpcConfiguration {
 
     @Bean(destroyMethod = "close")
-    GrpcClientManager<CustomerApi> customerClientManager(
+    GrpcClientManager customerClientManager(
             ServiceDiscovery serviceDiscovery) {
 
-        return new GrpcClientManager<>(
-                serviceDiscovery,
-                CustomerGrpcClient::new,
-                100
-        );
+        return new GrpcClientManager(serviceDiscovery, 100);
     }
 
     @Bean
     CustomerApi customerApi(
-            GrpcClientManager<CustomerApi> manager) {
+            GrpcClientManager manager) {
 
         InvocationHandler handler = (proxy, method, args) ->
                 manager.execute(
                         "CUSTOMER_SERVICE",
+                        CustomerGrpcClient::new,
                         client -> method.invoke(client, args)
                 );
 
@@ -405,15 +404,17 @@ public final class OrderGrpcClient implements OrderApi {
 }
 ```
 
-Then create a manager using:
+Then reuse the same non-generic manager. The service-specific type lives at the factory/call boundary:
 
 ```java
-GrpcClientManager<OrderApi> orderManager =
-        new GrpcClientManager<>(
-                serviceDiscovery,
-                OrderGrpcClient::new,
-                100
-        );
+GrpcClientManager clientManager =
+        new GrpcClientManager(serviceDiscovery, 100);
+
+clientManager.execute(
+        "ORDER_SERVICE",
+        OrderGrpcClient::new,
+        client -> client.getOrder("12345")
+);
 ```
 
 The discovery configuration only needs the logical service:
@@ -450,6 +451,86 @@ The JDK proxy intercepts the invocation exactly like a normal Java call.
 This is useful when existing CORBA-style code dynamically invokes service operations and the migration needs to preserve that calling pattern.
 
 ## 11. Channel and stub lifecycle
+
+### Type association
+
+The manager is intentionally **not generic**. There is no `GrpcClientManager<CustomerApi>` or `GrpcClientManager`.
+
+The only generic type is the factory:
+
+```java
+@FunctionalInterface
+public interface GrpcClientFactory<T> {
+    T create(ManagedChannel channel);
+}
+```
+
+For example:
+
+```java
+CustomerGrpcClient::new
+```
+
+is a `GrpcClientFactory<CustomerGrpcClient>`, while:
+
+```java
+OrderGrpcClient::new
+```
+
+is a `GrpcClientFactory<OrderGrpcClient>`.
+
+The manager therefore stays transport/discovery infrastructure. At the point where a service operation is executed, the factory tells the manager how to turn the selected channel into the correct service-specific adapter.
+
+### Are channels separated by Java type?
+
+**No. Channels are not keyed or separated by Java API type.**
+
+The current implementation caches an active `GrpcClient` by **logical service name**:
+
+```text
+CUSTOMER_SERVICE -> one active discovered instance -> one ManagedChannel
+ORDER_SERVICE    -> one active discovered instance -> one ManagedChannel
+```
+
+The service-specific adapter/stub is created on that channel:
+
+```text
+CUSTOMER_SERVICE
+    |
+    +-- ServiceTarget(customer-1, server-a:50051)
+    |
+    +-- ManagedChannel
+    |
+    +-- CustomerGrpcClient
+          |
+          +-- CustomerServiceGrpc.CustomerServiceBlockingStub
+```
+
+If two logical services happen to resolve to the same host and port, the current implementation still treats them as separate service connections and creates separate channels. **It does not currently share channels across service types.**
+
+That is deliberate: channel sharing is a separate optimization/connection-management concern and should not be inferred merely because two service endpoints happen to match.
+
+If channel sharing is needed later, introduce an explicit connection/channel cache keyed by a connection identity such as the normalized endpoint (and, in a secured deployment, any TLS/security identity that affects connection reuse). Multiple service-specific adapters can then be built on the same channel.
+
+### Client lifecycle
+
+A `GrpcClient` represents the resources for one discovered service target:
+
+```text
+ServiceTarget
+    +
+ManagedChannel
+    +
+service-specific adapter/stub
+```
+
+Channels and generated stubs should not be created for every RPC.
+
+The manager owns the cached clients and retires them when they are evicted, replaced, or the manager is closed.
+
+Do not shut down a cached channel merely because one RPC failed. A channel can be used concurrently by other application threads; lifecycle belongs to the client manager/cache.
+
+## 13. Kubernetes migration
 
 A `GrpcClient` represents the connection resources for one discovered target:
 
@@ -504,7 +585,7 @@ The proxy, client manager and application APIs can remain unchanged.
 
 A Kubernetes implementation can resolve a Service DNS name and return a `ServiceTarget`. If exact pod-level exclusion is required, the Kubernetes discovery implementation needs endpoint-level information rather than only a normal Service DNS name.
 
-## 13. Production considerations
+## 14. Production considerations
 
 The checked-in reference implementation uses plaintext gRPC for local development.
 
@@ -522,7 +603,7 @@ For production deployments, add the application's standard:
 
 Do not use cache expiration as a substitute for service health detection. Cache lifecycle and service availability are separate concerns.
 
-## 14. Core design principle
+## 15. Core design principle
 
 The application should see:
 

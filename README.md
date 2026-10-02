@@ -165,18 +165,7 @@ The C++ provider sends heartbeats at approximately TTL/3. If a process dies with
 
 The application should inject the proxy as `CustomerApi`.
 
-A typical Spring configuration is:
-
-```java
-@Configuration
-public class CustomerGrpcConfiguration {
-
-    @Bean
-    CustomerGrpcClient customerGrpcClient() {
-        return new CustomerGrpcClient(null); // replaced below by the manager factory
-    }
-}
-```
+For static discovery, Spring can provide a StaticServiceDiscovery bean from the configured logical service instances, then inject it into the non-generic GrpcClientManager. The service map describes service names and instance endpoints; it does not map protobuf types to hosts.
 
 The cleaner production pattern is to create the manager with a factory and expose a JDK proxy:
 
@@ -529,6 +518,8 @@ Channels and generated stubs should not be created for every RPC.
 The manager owns the cached clients and retires them when they are evicted, replaced, or the manager is closed.
 
 Do not shut down a cached channel merely because one RPC failed. A channel can be used concurrently by other application threads; lifecycle belongs to the client manager/cache.
+
+A discovered channel is tied to the service-specific adapter created with it: CustomerGrpcClient is constructed with that ManagedChannel, and its generated CustomerServiceBlockingStub uses the same channel. On a retryable exception, the manager removes and invalidates the failed GrpcClient, shuts down its old channel through the cache removal listener, performs a new discovery lookup excluding the failed instance, creates a new ManagedChannel, and calls CustomerGrpcClient::new with that new channel. The CustomerApi proxy remains the same; the client and channel underneath it are replaced.
 
 ## 13. Kubernetes migration
 

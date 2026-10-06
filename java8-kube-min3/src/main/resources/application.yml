@@ -1,0 +1,10 @@
+grpc:
+  customer:
+    # Kubernetes: customer-service
+    # Interim non-Kubernetes: server-a, localhost, or another fixed host
+    host: customer-service
+    port: 50051
+
+  client:
+    max-attempts: 3
+    retry-delay-millis: 100

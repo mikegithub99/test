@@ -1,0 +1,13 @@
+grpc:
+  customer:
+    # Kubernetes Service DNS name + Service port.
+    host: customer-service
+    port: 50051
+
+    # Interim non-Kubernetes example:
+    # host: server-a
+    # port: 50051
+
+  client:
+    max-attempts: 3
+    retry-delay-millis: 100

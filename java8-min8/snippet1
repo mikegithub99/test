@@ -1,0 +1,20 @@
+Status.Code statusCode = grpcFailure.getStatus().getCode();
+boolean retryableStatus = policy.isRetryable(statusCode);
+boolean attemptsRemaining = attempts < policy.getMaxAttempts();
+boolean shouldRetry = retryableStatus && attemptsRemaining;
+
+log.debug(
+        "gRPC retry decision: status={}, retryableStatuses={}, statusRetryable={}, " +
+        "attempt={}/{}, attemptsRemaining={}, shouldRetry={}",
+        statusCode,
+        policy.getRetryableStatuses(),
+        retryableStatus,
+        attempts,
+        policy.getMaxAttempts(),
+        attemptsRemaining,
+        shouldRetry);
+
+// In GrpcRetryPolicy:
+public Set<Status.Code> getRetryableStatuses() {
+    return retryableStatuses;
+}

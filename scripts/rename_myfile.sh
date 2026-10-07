@@ -1,6 +1,10 @@
 #!/usr/bin/env bash
 
-find . -type f -name 'MyFile*' -print0 |
-while IFS= read -r -d '' f; do
-    mv -- "$f" "$(dirname "$f")/YourFile${f##*MyFile}"
-done
+find . -type f -name '*MyFile*' -exec sh -c '
+  for f; do
+    dir=${f%/*}
+    name=${f##*/}
+    newname=${name//MyFile/YourFile}
+    mv -- "$f" "$dir/$newname"
+  done
+' sh {} +

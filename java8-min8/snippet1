@@ -14,6 +14,12 @@ log.debug(
         attemptsRemaining,
         shouldRetry);
 
+if (!shouldRetry) {
+    throw grpcFailure;
+}
+
+// continue with retry delay / next attempt...
+
 // In GrpcRetryPolicy:
 public Set<Status.Code> getRetryableStatuses() {
     return retryableStatuses;

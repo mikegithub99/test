@@ -6,8 +6,7 @@ metadata:
   labels:
     app: customer-server
 spec:
-  # Headless Service: the Java Option B resolver needs the individual
-  # Pod endpoints rather than a single ClusterIP.
+  # Headless Service: Option B discovers individual Pod endpoints.
   clusterIP: None
   selector:
     app: customer-server

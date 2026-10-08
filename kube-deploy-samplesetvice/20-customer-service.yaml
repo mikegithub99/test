@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: customer-service
+  namespace: grpc-demo
+  labels:
+    app: customer-server
+spec:
+  # Headless Service: the Java Option B resolver needs the individual
+  # Pod endpoints rather than a single ClusterIP.
+  clusterIP: None
+  selector:
+    app: customer-server
+  ports:
+    - name: grpc
+      port: 50051
+      targetPort: grpc
+      protocol: TCP

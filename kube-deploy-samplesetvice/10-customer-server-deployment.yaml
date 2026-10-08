@@ -20,6 +20,7 @@ spec:
       labels:
         app: customer-server
     spec:
+      terminationGracePeriodSeconds: 30
       containers:
         - name: customer-server
           image: example/customer-server:latest

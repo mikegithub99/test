@@ -114,7 +114,7 @@ public final class KubernetesEndpointSliceDiscovery implements AutoCloseable {
         V1EndpointSliceList list = discoveryApi.listNamespacedEndpointSlice(
                 namespace, null, true, null, null,
                 SERVICE_LABEL + "=" + serviceName,
-                null, null, null, null, null);
+                null, null, null, null, null, false);
 
         synchronized (slices) {
             slices.clear();

@@ -1,0 +1,28 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: customer-client-endpointslice-reader
+  namespace: grpc-demo
+rules:
+  - apiGroups:
+      - discovery.k8s.io
+    resources:
+      - endpointslices
+    verbs:
+      - get
+      - list
+      - watch
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: customer-client-endpointslice-reader
+  namespace: grpc-demo
+subjects:
+  - kind: ServiceAccount
+    name: customer-client
+    namespace: grpc-demo
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: customer-client-endpointslice-reader

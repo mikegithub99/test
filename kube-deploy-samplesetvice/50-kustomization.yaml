@@ -1,0 +1,19 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - 00-namespace.yaml
+  - 10-customer-server-deployment.yaml
+  - 20-customer-service.yaml
+  - 30-client-serviceaccount.yaml
+  - 31-client-rbac.yaml
+  - 40-client-configmap.yaml
+  - 41-client-deployment.yaml
+
+images:
+  - name: example/customer-server
+    newName: example/customer-server
+    newTag: latest
+  - name: example/customer-client
+    newName: example/customer-client
+    newTag: latest

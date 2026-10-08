@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: customer-client
+  namespace: grpc-demo
+  labels:
+    app: customer-client
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: customer-client
+  template:
+    metadata:
+      labels:
+        app: customer-client
+    spec:
+      serviceAccountName: customer-client
+      containers:
+        - name: customer-client
+          image: example/customer-client:latest
+          imagePullPolicy: IfNotPresent
+          envFrom:
+            - configMapRef:
+                name: customer-client-config
+          resources:
+            requests:
+              cpu: 25m
+              memory: 64Mi
+            limits:
+              cpu: 250m
+              memory: 256Mi

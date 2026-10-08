@@ -1,8 +1,12 @@
-# Option B — Kubernetes EndpointSlice + gRPC round_robin
+# Option B — Kubernetes EndpointSlice + gRPC round_robin (Java 8)
 
 ## 1. Purpose
 
 Option B keeps the existing application-facing adapter and retry proxy, but moves backend discovery and endpoint load balancing into Kubernetes plus gRPC.
+
+This branch is specifically prepared for an application that must remain **Java 8 compatible**.
+
+gRPC-Java supports Java 8 and later. The Kubernetes Java client changed its Java baseline starting with version 20.0.0, so Java 8 applications must use either a pre-20 Kubernetes client release or the corresponding `-legacy` artifact. citeturn0search2turn0search0
 
 Architecture:
 
@@ -30,7 +34,77 @@ Architecture:
 
 The application never receives Pod IPs and never chooses a Pod.
 
-## 2. Why Option B
+## 2. Java 8 compatibility
+
+There is **no Java 21 requirement** in the Option B design.
+
+The source in this branch uses Java 8-compatible language/API features:
+
+- lambdas
+- method references
+- `java.util.function`
+- standard Java 8 collections/streams
+- no records
+- no sealed classes
+- no pattern matching
+- no `java.time` requirement beyond what Java 8 already provides
+
+gRPC-Java officially supports Java 8 and later. citeturn0search2
+
+### Kubernetes client requirement
+
+Starting with Kubernetes Java client 20.0.0, Java 8 support was removed from the normal SDK line. The Kubernetes Java client project provides a `-legacy` artifact for Java 8 users, for example:
+
+    io.kubernetes:client-java:20.0.0-legacy
+
+The official Kubernetes client documentation explicitly describes the `-legacy` suffix for Java 8 users. citeturn0search0turn0search4
+
+Alternatively, an older Java-8-compatible Kubernetes client line such as 19.x can be used without the `-legacy` suffix. Pin the exact version in the application's dependency management.
+
+### Maven example for Java 8
+
+Use Java 8 compilation:
+
+    <properties>
+        <maven.compiler.source>1.8</maven.compiler.source>
+        <maven.compiler.target>1.8</maven.compiler.target>
+    </properties>
+
+For a Kubernetes client 20.x Java 8 build, use the legacy artifact:
+
+    <dependency>
+        <groupId>io.kubernetes</groupId>
+        <artifactId>client-java</artifactId>
+        <version>20.0.0-legacy</version>
+    </dependency>
+
+Do **not** use:
+
+    <version>20.0.0</version>
+
+for a Java 8 runtime, because the normal 20.x SDK line requires a newer Java baseline. citeturn0search0turn0search4
+
+If the application is already standardized on Kubernetes client 19.x, the normal artifact can be used:
+
+    <dependency>
+        <groupId>io.kubernetes</groupId>
+        <artifactId>client-java</artifactId>
+        <version>19.0.1</version>
+    </dependency>
+
+The important rule is: **the Kubernetes client dependency must be a Java-8-compatible line**.
+
+### gRPC transport note for Java 8
+
+For TLS deployments, verify the Java 8 update level. gRPC's security guidance notes that OpenJDK versions before Java 8u252 do not support ALPN and recommends `grpc-netty-shaded` for most users. citeturn0search8
+
+For plaintext internal Kubernetes traffic, this branch uses:
+
+    .usePlaintext()
+
+That is appropriate only when the application's network/security requirements allow plaintext gRPC.
+
+## 3. Why Option B
 
 Option B avoids a custom client manager and avoids an Envoy/Consul control plane.
 
@@ -45,7 +119,7 @@ This gives a small separation of responsibilities:
 - GrpcRetryProxy: bounded retry policy.
 - Adapter: application request/response translation.
 
-## 3. Kubernetes Service
+## 4. Kubernetes Service
 
 This implementation is intended for a headless Service because the client is deliberately discovering individual Pod endpoints.
 
@@ -74,7 +148,7 @@ Kubernetes maintains EndpointSlices for the Service. The resolver watches Endpoi
 
     kubernetes.io/service-name=customer-service
 
-## 4. Target
+## 5. Target
 
 The adapter uses:
 
@@ -84,7 +158,7 @@ This is a logical target, not a Pod address.
 
 The kube NameResolver extracts the Service name, asks the Kubernetes API for EndpointSlices in the configured namespace, and publishes ready endpoint IP/port pairs to gRPC.
 
-## 5. Classes
+## 6. Classes
 
 ### AdapterGrpcBase
 
@@ -142,7 +216,7 @@ Creates the retry policy and exposes the retrying customerAdapter bean.
 
 These are the existing retry components carried into Option B unchanged. The retry proxy owns retry count, status selection, and backoff. It does not own endpoint selection.
 
-## 6. Detailed invocation sequence
+## 7. Detailed invocation sequence
 
 Assume Kubernetes currently reports:
 
@@ -218,7 +292,7 @@ The selected HTTP/2 subchannel sends the RPC to the selected Pod.
 
 The application receives only the Customer result.
 
-## 7. Pod failure
+## 8. Pod failure
 
 Suppose B becomes unavailable.
 
@@ -238,7 +312,7 @@ Conceptually:
 
 Subsequent RPCs are therefore sent through the remaining ready subchannels.
 
-## 8. Pod replacement or migration
+## 9. Pod replacement or migration
 
 Suppose Kubernetes replaces B and gives the replacement a different IP.
 
@@ -262,7 +336,7 @@ gRPC removes obsolete subchannels and creates new ones as required.
 
 The client does not permanently cache Pod IPs.
 
-## 9. Retry behavior
+## 10. Retry behavior
 
 The existing GrpcRetryProxy remains above the adapter.
 
@@ -306,7 +380,7 @@ Option B does not guarantee that a retry must use a different Pod from the faile
 
 If that exact behavior becomes mandatory, Option C is the appropriate architecture.
 
-## 10. Retry configuration
+## 11. Retry configuration
 
 Recommended starting configuration:
 
@@ -320,7 +394,7 @@ max-attempts is total attempts, including the first attempt.
 
 Mutating RPCs should only be retried when duplicate execution is safe or an idempotency mechanism exists.
 
-## 11. Reliability and discovery lifecycle
+## 12. Reliability and discovery lifecycle
 
 The discovery code intentionally keeps the complete EndpointSlice set rather than assuming one slice contains every Pod.
 
@@ -332,7 +406,7 @@ This is important because Kubernetes EndpointSlice state is dynamic and can span
 
 The resolver also deduplicates address/port pairs before publishing them to gRPC.
 
-## 12. Spring bean wiring
+## 13. Spring bean wiring
 
 The application continues to inject:
 
@@ -368,7 +442,7 @@ Existing application wiring can continue to refer to the bean name:
 
 The application-facing type remains CustomerAdapterGrpc.
 
-## 13. Spring properties
+## 14. Spring properties
 
 Example:
 
@@ -386,7 +460,7 @@ For a local environment using the standard Kubernetes client configuration:
 
     grpc.kubernetes.in-cluster=false
 
-## 14. Kubernetes RBAC
+## 15. Kubernetes RBAC
 
 The client Pod needs permission to read EndpointSlices in the Service namespace.
 
@@ -403,9 +477,9 @@ Minimum permissions:
 
 No write access to EndpointSlices is required.
 
-## 15. Dependencies
+## 16. Dependencies
 
-The implementation targets Java 21.
+This branch targets **Java 8**.
 
 It requires:
 
@@ -414,11 +488,23 @@ It requires:
 - Spring
 - SLF4J
 
-Pin the Kubernetes Java client version in the application's dependency management rather than using a floating version.
+### Required Java 8 dependency rule
 
-The modern Kubernetes Java client line supports Java 11+, so Java 21 is appropriate.
+Pin the Kubernetes Java client explicitly.
 
-## 16. What Option B owns
+For Kubernetes Java client 20.x:
+
+    io.kubernetes:client-java:20.0.0-legacy
+
+For a Java-8-compatible 19.x line:
+
+    io.kubernetes:client-java:19.0.1
+
+Do not accidentally upgrade a Java 8 application to the normal 20.x+ SDK artifact. The Kubernetes project documents that Java 8 support was removed from 20.0.0 and that the `-legacy` artifact is the compatibility path. citeturn0search0turn0search4
+
+The gRPC dependency does not require a `-legacy` suffix. gRPC-Java supports Java 8 and later. citeturn0search2
+
+## 17. What Option B owns
 
 Our code owns:
 
@@ -455,7 +541,7 @@ The application owns:
 - adapter contract
 - request/response handling
 
-## 17. Why this is different from Option C
+## 18. Why this is different from Option C
 
 Option B does not maintain a custom endpoint-to-channel pool.
 
@@ -479,7 +565,7 @@ Option C remains useful if we later require:
 
 Option B is the simpler choice when the requirement is resilient distribution across the currently ready Kubernetes backends.
 
-## 18. Verification target
+## 19. Verification target
 
 Before production adoption, test the actual behavior with at least three backend Pods that return their identity.
 

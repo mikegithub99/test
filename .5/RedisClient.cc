@@ -19,6 +19,8 @@ using std::string;
 using std::tolower;
 using std::transform;
 using std::unique_ptr;
+using sw::redis::Redis;
+using sw::redis::RedisCluster;
 
 // The host application provides this registry lookup.
 string get_reg_val(const string& key);
@@ -70,13 +72,13 @@ RedisClient::RedisClient(ConfigProvider provider)
 
   if (config.isCluster)
   {
-    m_client.emplace<unique_ptr<sw::redis::RedisCluster>>(
-        make_unique<sw::redis::RedisCluster>(config.redisUrl));
+    m_client.emplace<unique_ptr<RedisCluster>>(
+        make_unique<RedisCluster>(config.redisUrl));
   }
   else
   {
-    m_client.emplace<unique_ptr<sw::redis::Redis>>(
-        make_unique<sw::redis::Redis>(config.redisUrl));
+    m_client.emplace<unique_ptr<Redis>>(
+        make_unique<Redis>(config.redisUrl));
   }
 }
 

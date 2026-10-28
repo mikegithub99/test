@@ -2,21 +2,21 @@
 
 ## RedisClient configuration injection
 
-`RedisClient::SetConfigProvider()` lets production code adapt the existing `get_reg_val()` registry and lets examples/tests inject mock values. Install the provider **before** the first `RedisClient::GetClient()` call. Configuration is read once when the lazy singleton is first initialized; attempting to replace the provider after initialization begins throws.
+Pass an optional provider to `RedisClient::GetClient()` on its first call. This keeps `RedisClient` small: it accepts a callable returning `RedisClient::Config`, while the default provider reads `REDIS_URL` and optional `REDIS_CLUSTER` environment variables.
 
 Production integration example:
 
 ```cpp
-RedisClient::SetConfigProvider([] {
+// Call after get_reg_val() is initialized and before constructing RedisJobStatus.
+RedisClient::GetClient([] {
   return RedisClient::Config{
       get_reg_val("redisUrl"),
       static_cast<bool>(get_reg_val("isRedisCluster"))};
 });
-// Only after the provider is installed:
 RedisJobStatus status;
 ```
 
-Without a provider, the client reads `REDIS_URL` and optional `REDIS_CLUSTER` environment variables. `REDIS_CLUSTER=true` or `1` enables cluster mode.
+Tests and examples can pass a provider returning deterministic mock values. The first `GetClient()` call initializes the singleton; providers passed on later calls are ignored. `REDIS_CLUSTER=true` or `1` enables cluster mode when using the default provider.
 
 ## Files
 

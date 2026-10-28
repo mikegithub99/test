@@ -287,7 +287,7 @@ RedisJobStatus::Job readJob(Redis& redis, const std::string& key)
 } // namespace
 
 RedisJobStatus::RedisJobStatus()
-    : m_client(RedisClient::GetClient())
+    : m_client(RedisClient::Instance())
 {
 }
 

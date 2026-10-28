@@ -25,11 +25,16 @@ In `.5/RedisJobStatus.cc`, scripts are stored as C++ raw string literals. For ex
 
 ```cpp
 const char* const kRegisterServerScript = R"lua(
-local t = redis.call('TYPE', KEYS[1]).ok
-if t ~= 'none' and t ~= 'set' then
+local function validtype(key)
+  local t = redis.call('TYPE', key).ok
+  return t == 'none' or t == 'set'
+end
+
+if not validtype(KEYS[1]) or not validtype(KEYS[2]) then
   return redis.error_reply('wrong key type')
 end
-return redis.call('SADD', KEYS[1], ARGV[1])
+redis.call('SADD', KEYS[1], ARGV[1])
+return redis.call('SADD', KEYS[2], ARGV[2])
 )lua";
 ```
 
@@ -75,7 +80,7 @@ This script checks the job, owner, indexes, state and counters. It decrements th
 
 ### 4. Register a server — `kRegisterServerScript`
 
-This script ensures the server registry key is either absent or a set, then adds the server ID with `SADD`. The global server-type registry is updated by a separate C++ Redis operation; it is intentionally not part of this script because it is a separate key outside the server-type hash slot.
+This script receives two keys: `servers:{registry}:types` and `servers:{registry}:type:<serverType>`. Both keys share the literal `{registry}` hash tag, so Redis Cluster routes them to the same slot. The script checks that both keys are either absent or sets before writing, then adds the server type to the global discovery set and the server ID to the type-specific set. One script keeps the two registry updates together without a cross-slot error.
 
 ## Lua features used by these scripts
 
@@ -96,7 +101,7 @@ The scripts deliberately use a small subset of Lua. Most application logic, iden
 ## Important implementation notes
 
 - **Pass keys explicitly.** Redis keys accessed by a script should be provided in the key list and referenced through `KEYS`, not assembled from arbitrary data inside Lua.
-- **Keep Cluster keys co-located.** The job, indexes and summaries use the `{serverType}` hash tag in their key names so the related keys map to the same Redis Cluster hash slot. A script touching keys in different slots will fail in Redis Cluster.
+- **Keep Cluster keys co-located.** Job lifecycle keys use the `{serverType}` hash tag. The two server registry keys use the shared literal `{registry}` tag so registration can update them in one script. A script touching keys in different slots will fail in Redis Cluster.
 - **Validate before writing.** The scripts check expected key types and important state before changing data. Keep those checks ahead of the writes.
 - **Keep scripts short.** Redis runs a script without interleaving other commands. Avoid long loops or expensive work.
 - **Treat return values as part of the C++/Lua contract.** The C++ API maps the integer returned by `eval<int64_t>` to its `RedisJobStatus::Result` enum. If a script's return codes change, update and verify the C++ mapping together.

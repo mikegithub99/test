@@ -11,7 +11,14 @@
 #include <string>
 #include <utility>
 
-using namespace std;
+using std::invalid_argument;
+using std::make_unique;
+using std::move;
+using std::shared_ptr;
+using std::string;
+using std::tolower;
+using std::transform;
+using std::unique_ptr;
 
 // The host application provides this registry lookup.
 string get_reg_val(const string& key);

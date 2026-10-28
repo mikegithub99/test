@@ -15,7 +15,7 @@ namespace
 {
 void initializeApplicationConfiguration()
 {
-  // TODO: initialize the application registry used by get_reg_val().
+  // TODO: initialize the host application's configuration registry before constructing RedisJobStatus.
 }
 
 void printCounters(const std::map<std::string, std::int64_t>& counters)

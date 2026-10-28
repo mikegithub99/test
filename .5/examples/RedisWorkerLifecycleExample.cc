@@ -19,21 +19,23 @@
 #include <stdexcept>
 #include <string>
 
+using namespace std;
+
 namespace
 {
 struct Options
 {
-  std::string serverType;
-  std::string redisUrl = "redis://127.0.0.1:6379";
+  string serverType;
+  string redisUrl = "redis://127.0.0.1:6379";
   bool cluster = false;
 };
 
 // Mock configuration registry for this standalone example.
-std::string mockGetRegVal(const std::string& key, const Options& options)
+string mockGetRegVal(const string& key, const Options& options)
 {
   if (key == "redisUrl") return options.redisUrl;
   if (key == "isRedisCluster") return options.cluster ? "true" : "false";
-  throw std::invalid_argument("Unknown mock configuration key: " + key);
+  throw invalid_argument("Unknown mock configuration key: " + key);
 }
 
 Options parseArgs(int argc, char** argv)
@@ -41,7 +43,7 @@ Options parseArgs(int argc, char** argv)
   Options options;
   for (int i = 1; i < argc; ++i)
   {
-    const std::string arg(argv[i]);
+    const string arg(argv[i]);
     if (arg.rfind("--serverType=", 0) == 0)
       options.serverType = arg.substr(13);
     else if (arg.rfind("--redisUrl=", 0) == 0)
@@ -52,10 +54,10 @@ Options parseArgs(int argc, char** argv)
       options.cluster = value == "true" || value == "1";
     }
     else
-      throw std::invalid_argument("Unknown argument: " + arg);
+      throw invalid_argument("Unknown argument: " + arg);
   }
   if (options.serverType.empty())
-    throw std::invalid_argument(
+    throw invalid_argument(
         "Usage: RedisWorkerLifecycleExample "
         "--serverType=query-server-type1 "
         "[--redisUrl=redis://127.0.0.1:6379] [--cluster=false]");
@@ -76,10 +78,10 @@ const char* resultName(RedisJobStatus::Result result)
   return "UnknownResult";
 }
 
-void printCounters(const std::map<std::string, std::int64_t>& counters)
+void printCounters(const map<string, int64_t>& counters)
 {
   for (const auto& item : counters)
-    std::cout << "  " << item.first << "=" << item.second << '\n';
+    cout << "  " << item.first << "=" << item.second << '\n';
 }
 } // namespace
 
@@ -99,80 +101,80 @@ int main(int argc, char** argv)
     });
 
     RedisJobStatus api;
-    const std::string serverId = "lifecycle-example-" + std::to_string(
-        static_cast<unsigned long long>(std::hash<std::string>{}(
+    const string serverId = "lifecycle-example-" + to_string(
+        static_cast<unsigned long long>(hash<string>{}(
             options.serverType + options.redisUrl)) % 1000000ULL);
 
-    std::cout << "1) registerServer\n";
+    cout << "1) registerServer\n";
     api.registerServer(options.serverType, serverId);
 
-    std::cout << "2) refreshHeartbeat\n";
+    cout << "2) refreshHeartbeat\n";
     api.refreshHeartbeat(options.serverType, serverId, 60);
 
-    const std::string jobId = "lifecycle-example-job-" + serverId;
-    const std::map<std::string, std::string> metadata = {
+    const string jobId = "lifecycle-example-job-" + serverId;
+    const map<string, string> metadata = {
         {"command", "demo"}, {"submittedBy", "RedisWorkerLifecycleExample"}};
 
-    std::cout << "3) createPendingJob\n";
+    cout << "3) createPendingJob\n";
     auto result = api.createPendingJob(
         jobId, options.serverType, serverId, metadata);
-    std::cout << "  result=" << resultName(result) << '\n';
+    cout << "  result=" << resultName(result) << '\n';
     if (result != RedisJobStatus::Result::Success)
-      throw std::runtime_error(
+      throw runtime_error(
           "createPendingJob did not return Success; use a fresh serverType "
           "or remove the prior demo job");
 
-    std::cout << "4) getServerTypes\n";
+    cout << "4) getServerTypes\n";
     for (const auto& type : api.getServerTypes())
-      std::cout << "  " << type << '\n';
+      cout << "  " << type << '\n';
 
-    std::cout << "5) getTypeSummary (PENDING expected)\n";
+    cout << "5) getTypeSummary (PENDING expected)\n";
     printCounters(api.getTypeSummary(options.serverType));
 
-    std::cout << "6) getServerSummaries\n";
+    cout << "6) getServerSummaries\n";
     for (const auto& server : api.getServerSummaries(options.serverType))
     {
-      std::cout << "  serverId=" << server.serverId << '\n';
+      cout << "  serverId=" << server.serverId << '\n';
       printCounters(server.counters);
     }
 
-    std::cout << "7) getServerJobs (PENDING expected)\n";
+    cout << "7) getServerJobs (PENDING expected)\n";
     for (const auto& job : api.getServerJobs(options.serverType, serverId))
-      std::cout << "  jobId=" << job.jobId << " status=" << job.status << '\n';
+      cout << "  jobId=" << job.jobId << " status=" << job.status << '\n';
 
-    std::cout << "8) transitionJob PENDING -> ACTIVE\n";
+    cout << "8) transitionJob PENDING -> ACTIVE\n";
     result = api.transitionJob(
         jobId, options.serverType, RedisJobStatus::State::Active);
-    std::cout << "  result=" << resultName(result) << '\n';
+    cout << "  result=" << resultName(result) << '\n';
 
-    std::cout << "9) transitionJob ACTIVE -> SUSPENDED\n";
+    cout << "9) transitionJob ACTIVE -> SUSPENDED\n";
     result = api.transitionJob(
         jobId, options.serverType, RedisJobStatus::State::Suspended);
-    std::cout << "  result=" << resultName(result) << '\n';
+    cout << "  result=" << resultName(result) << '\n';
 
-    std::cout << "10) transitionJob SUSPENDED -> ACTIVE\n";
+    cout << "10) transitionJob SUSPENDED -> ACTIVE\n";
     result = api.transitionJob(
         jobId, options.serverType, RedisJobStatus::State::Active);
-    std::cout << "  result=" << resultName(result) << '\n';
+    cout << "  result=" << resultName(result) << '\n';
 
-    std::cout << "11) completeJob\n";
+    cout << "11) completeJob\n";
     result = api.completeJob(jobId, options.serverType);
-    std::cout << "  result=" << resultName(result) << '\n';
+    cout << "  result=" << resultName(result) << '\n';
 
-    std::cout << "12) final getTypeSummary\n";
+    cout << "12) final getTypeSummary\n";
     printCounters(api.getTypeSummary(options.serverType));
 
-    std::cout << "13) final getServerJobs (job should be absent)\n";
-    std::cout << "  jobs=" <<
+    cout << "13) final getServerJobs (job should be absent)\n";
+    cout << "  jobs=" <<
         api.getServerJobs(options.serverType, serverId).size() << '\n';
 
-    std::cout << "Demo complete. Server registry remains; heartbeat expires "
+    cout << "Demo complete. Server registry remains; heartbeat expires "
                  "after its TTL.\n";
     return EXIT_SUCCESS;
   }
-  catch (const std::exception& ex)
+  catch (const exception& ex)
   {
-    std::cerr << "RedisWorkerLifecycleExample: " << ex.what() << '\n';
+    cerr << "RedisWorkerLifecycleExample: " << ex.what() << '\n';
     return EXIT_FAILURE;
   }
 }

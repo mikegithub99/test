@@ -9,13 +9,12 @@
 #define REDIS_JOB_STATUS_H
 
 #include <cstdint>
-#include <std::map>
+#include <map>
 #include <memory>
 #include <std::string>
 #include <std::vector>
 
 #include "RedisClient.h"
-
 
 /**
  * @class RedisJobStatus

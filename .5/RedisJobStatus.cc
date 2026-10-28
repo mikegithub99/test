@@ -10,7 +10,17 @@
 #include <stdexcept>
 #include <utility>
 
-using namespace std;
+using std::back_inserter;
+using std::chrono::seconds;
+using std::exception;
+using std::int64_t;
+using std::invalid_argument;
+using std::map;
+using std::pair;
+using std::runtime_error;
+using std::stoll;
+using std::string;
+using std::vector;
 
 namespace
 {
@@ -476,7 +486,7 @@ void RedisJobStatus::refreshHeartbeat(
         redis.set(
             key,
             serverId,
-            chrono::seconds(ttlSeconds));
+            seconds(ttlSeconds));
       });
 }
 

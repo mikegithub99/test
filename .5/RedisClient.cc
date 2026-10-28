@@ -6,34 +6,20 @@
 #include "RedisClient.h"
 
 #include <cstdlib>
-#include <mutex>
 #include <stdexcept>
 #include <string>
 #include <utility>
 
 namespace
 {
-struct ConfigurationState
-{
-  std::mutex mutex;
-  RedisClient::ConfigProvider provider;
-  bool initializationStarted = false;
-};
-
-ConfigurationState& configurationState()
-{
-  static ConfigurationState state;
-  return state;
-}
-
-RedisClient::Config environmentConfig()
+RedisClient::Config defaultConfigProvider()
 {
   const char* url = std::getenv("REDIS_URL");
   const char* cluster = std::getenv("REDIS_CLUSTER");
   if (!url)
   {
     throw std::invalid_argument(
-        "RedisClient: set REDIS_URL or install a ConfigProvider");
+        "RedisClient: set REDIS_URL or pass a ConfigProvider to GetClient()");
   }
 
   const std::string clusterValue = cluster ? cluster : "false";
@@ -43,35 +29,9 @@ RedisClient::Config environmentConfig()
 }
 } // namespace
 
-void RedisClient::SetConfigProvider(ConfigProvider provider)
+RedisClient::RedisClient(ConfigProvider provider)
 {
-  if (!provider)
-  {
-    throw std::invalid_argument("RedisClient: ConfigProvider must be callable");
-  }
-
-  auto& state = configurationState();
-  std::lock_guard<std::mutex> lock(state.mutex);
-  if (state.initializationStarted)
-  {
-    throw std::logic_error(
-        "RedisClient: configuration provider must be installed before "
-        "GetClient() initializes the singleton");
-  }
-  state.provider = std::move(provider);
-}
-
-RedisClient::RedisClient()
-{
-  ConfigProvider provider;
-  {
-    auto& state = configurationState();
-    std::lock_guard<std::mutex> lock(state.mutex);
-    state.initializationStarted = true;
-    provider = state.provider;
-  }
-
-  const Config config = provider ? provider() : environmentConfig();
+  const Config config = provider ? provider() : defaultConfigProvider();
   if (config.redisUrl.empty())
   {
     throw std::invalid_argument("RedisClient: redisUrl is empty");
@@ -89,8 +49,9 @@ RedisClient::RedisClient()
   }
 }
 
-std::shared_ptr<RedisClient> RedisClient::GetClient()
+std::shared_ptr<RedisClient> RedisClient::GetClient(ConfigProvider provider)
 {
-  static const std::shared_ptr<RedisClient> instance(new RedisClient());
+  static const std::shared_ptr<RedisClient> instance(
+      new RedisClient(std::move(provider)));
   return instance;
 }

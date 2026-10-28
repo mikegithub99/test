@@ -20,8 +20,9 @@
  * @class RedisJobStatus
  * @brief Implements atomic job lifecycle operations and dashboard reads.
  *
- * Server types are tracked in the global SET servers:types; each type's
- * instances are tracked in servers:type:{serverType}.
+ * Server types are tracked in SET servers:{registry}:types; each type's
+ * instances are tracked in servers:{registry}:type:serverType. Both registry
+ * keys share the {registry} Redis Cluster hash tag for atomic registration.
  *
  * All lifecycle keys use the server type as their Redis Cluster hash tag.
  * The caller supplies serverType as a routing hint; Lua scripts validate

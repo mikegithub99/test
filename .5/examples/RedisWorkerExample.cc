@@ -20,7 +20,17 @@
 #include <string>
 #include <thread>
 
-using namespace std;
+using std::atomic;
+using std::chrono::seconds;
+using std::cerr;
+using std::cout;
+using std::exception;
+using std::int64_t;
+using std::invalid_argument;
+using std::random_device;
+using std::string;
+using std::this_thread;
+using std::uniform_int_distribution;
 
 namespace
 {
@@ -114,7 +124,7 @@ int main(int argc, char** argv)
 
     while (g_running.load())
     {
-      this_thread::sleep_for(chrono::seconds(10));
+      this_thread::sleep_for(seconds(10));
       if (g_running.load())
       {
         status.refreshHeartbeat(serverType, serverId, ttlSeconds);

@@ -32,6 +32,7 @@ using std::string;
 using std::this_thread;
 using std::uniform_int_distribution;
 
+
 namespace
 {
 atomic<bool> g_running{true};

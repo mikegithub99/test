@@ -9,18 +9,13 @@
 #define REDIS_JOB_STATUS_H
 
 #include <cstdint>
-#include <map>
+#include <std::map>
 #include <memory>
-#include <string>
-#include <vector>
+#include <std::string>
+#include <std::vector>
 
 #include "RedisClient.h"
 
-using std::int64_t;
-using std::map;
-using std::shared_ptr;
-using std::string;
-using std::vector;
 
 /**
  * @class RedisJobStatus
@@ -36,7 +31,7 @@ using std::vector;
 class RedisJobStatus final
 {
 public:
-  enum class Result : int64_t
+  enum class Result : std::int64_t
   {
     Success = 0,
     NoOp = 1,
@@ -55,17 +50,17 @@ public:
 
   struct Job
   {
-    string jobId;
-    string status;
-    string serverType;
-    string serverId;
-    map<string, string> fields;
+    std::string jobId;
+    std::string status;
+    std::string serverType;
+    std::string serverId;
+    std::map<std::string, std::string> fields;
   };
 
   struct ServerSummary
   {
-    string serverId;
-    map<string, int64_t> counters;
+    std::string serverId;
+    std::map<std::string, std::int64_t> counters;
   };
 
   RedisJobStatus();
@@ -78,10 +73,10 @@ public:
    * @param fields Additional display metadata; reserved fields are overwritten.
    */
   Result createPendingJob(
-      const string& jobId,
-      const string& serverType,
-      const string& serverId,
-      const map<string, string>& fields = {});
+      const std::string& jobId,
+      const std::string& serverType,
+      const std::string& serverId,
+      const std::map<std::string, std::string>& fields = {});
 
   /**
    * @brief Transitions a tracked job to ACTIVE or SUSPENDED.
@@ -90,38 +85,38 @@ public:
    * SUSPENDED->ACTIVE. Repeating the current state returns NoOp.
    */
   Result transitionJob(
-      const string& jobId,
-      const string& serverType,
+      const std::string& jobId,
+      const std::string& serverType,
       State newState);
 
   /**
    * @brief Removes a tracked job and updates indexes/counters atomically.
    */
   Result completeJob(
-      const string& jobId,
-      const string& serverType);
+      const std::string& jobId,
+      const std::string& serverType);
 
   /** @brief Registers a server instance under its type. */
   void registerServer(
-      const string& serverType,
-      const string& serverId);
+      const std::string& serverType,
+      const std::string& serverId);
 
   /** @brief Refreshes the server heartbeat with a positive TTL in seconds. */
   void refreshHeartbeat(
-      const string& serverType,
-      const string& serverId,
-      int64_t ttlSeconds);
+      const std::string& serverType,
+      const std::string& serverId,
+      std::int64_t ttlSeconds);
 
   /** @brief Discovers server types registered by workers. */
-  vector<string> getServerTypes();
+  std::vector<std::string> getServerTypes();
 
   /** @brief Returns the materialized summary for one server type. */
-  map<string, int64_t> getTypeSummary(
-      const string& serverType);
+  std::map<std::string, std::int64_t> getTypeSummary(
+      const std::string& serverType);
 
   /** @brief Returns registered instances and their summary counters. */
-  vector<ServerSummary> getServerSummaries(
-      const string& serverType);
+  std::vector<ServerSummary> getServerSummaries(
+      const std::string& serverType);
 
   /**
    * @brief Reads current jobs for an instance.
@@ -129,18 +124,18 @@ public:
    * This returns the complete current set; callers should add bounded
    * pagination if an instance can own a large number of jobs.
    */
-  vector<Job> getServerJobs(
-      const string& serverType,
-      const string& serverId);
+  std::vector<Job> getServerJobs(
+      const std::string& serverType,
+      const std::string& serverId);
 
 private:
-  static string stateName(State state);
+  static std::string stateName(State state);
   static void validateIdentifier(
-      const string& value,
+      const std::string& value,
       const char* name,
       bool isServerType = false);
 
-  shared_ptr<RedisClient> m_client;
+  std::shared_ptr<RedisClient> m_client;
 };
 
 #endif // REDIS_JOB_STATUS_H

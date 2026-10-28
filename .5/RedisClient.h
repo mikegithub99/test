@@ -2,9 +2,8 @@
  * @file RedisClient.h
  * @brief Lazy singleton wrapper for standalone Redis or Redis Cluster.
  *
- * Configure a provider before the first GetClient() call. Applications can
- * adapt their get_reg_val() configuration registry; examples and tests can
- * provide deterministic mock configuration without defining a global symbol.
+ * Pass a ConfigProvider to GetClient() on its first call to inject application
+ * or test configuration. Without one, environment variables are used.
  */
 
 #ifndef REDIS_CLIENT_H
@@ -22,9 +21,8 @@
  * @class RedisClient
  * @brief Provides one configured Redis client instance.
  *
- * The configuration provider is called once, during lazy initialization.
- * If no provider is installed, REDIS_URL and REDIS_CLUSTER environment
- * variables are used (REDIS_CLUSTER accepts "1" or "true" for cluster mode).
+ * Configuration is read once during lazy initialization. The first call to
+ * GetClient() determines the provider for the process-wide singleton.
  */
 class RedisClient final
 {
@@ -41,13 +39,12 @@ public:
       std::unique_ptr<sw::redis::RedisCluster>>;
 
   /**
-   * @brief Installs configuration logic before the first GetClient() call.
-   * @throws std::logic_error if client initialization has already started.
+   * @brief Gets the process-wide client wrapper, initializing it lazily.
+   * @param provider Optional configuration provider. If omitted, the default
+   *        provider reads REDIS_URL and REDIS_CLUSTER from the environment.
+   *        A supplied provider must be passed on the first call.
    */
-  static void SetConfigProvider(ConfigProvider provider);
-
-  /** @brief Gets the process-wide client wrapper, initializing it lazily. */
-  static std::shared_ptr<RedisClient> GetClient();
+  static std::shared_ptr<RedisClient> GetClient(ConfigProvider provider = {});
 
   RedisClient(const RedisClient&) = delete;
   RedisClient& operator=(const RedisClient&) = delete;
@@ -68,7 +65,7 @@ public:
   }
 
 private:
-  RedisClient();
+  explicit RedisClient(ConfigProvider provider = {});
   Client m_client;
 };
 

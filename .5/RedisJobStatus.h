@@ -16,6 +16,12 @@
 
 #include "RedisClient.h"
 
+using std::int64_t;
+using std::map;
+using std::shared_ptr;
+using std::string;
+using std::vector;
+
 /**
  * @class RedisJobStatus
  * @brief Implements atomic job lifecycle operations and dashboard reads.
@@ -30,7 +36,7 @@
 class RedisJobStatus final
 {
 public:
-  enum class Result : std::int64_t
+  enum class Result : int64_t
   {
     Success = 0,
     NoOp = 1,
@@ -49,17 +55,17 @@ public:
 
   struct Job
   {
-    std::string jobId;
-    std::string status;
-    std::string serverType;
-    std::string serverId;
-    std::map<std::string, std::string> fields;
+    string jobId;
+    string status;
+    string serverType;
+    string serverId;
+    map<string, string> fields;
   };
 
   struct ServerSummary
   {
-    std::string serverId;
-    std::map<std::string, std::int64_t> counters;
+    string serverId;
+    map<string, int64_t> counters;
   };
 
   RedisJobStatus();
@@ -72,10 +78,10 @@ public:
    * @param fields Additional display metadata; reserved fields are overwritten.
    */
   Result createPendingJob(
-      const std::string& jobId,
-      const std::string& serverType,
-      const std::string& serverId,
-      const std::map<std::string, std::string>& fields = {});
+      const string& jobId,
+      const string& serverType,
+      const string& serverId,
+      const map<string, string>& fields = {});
 
   /**
    * @brief Transitions a tracked job to ACTIVE or SUSPENDED.
@@ -84,38 +90,38 @@ public:
    * SUSPENDED->ACTIVE. Repeating the current state returns NoOp.
    */
   Result transitionJob(
-      const std::string& jobId,
-      const std::string& serverType,
+      const string& jobId,
+      const string& serverType,
       State newState);
 
   /**
    * @brief Removes a tracked job and updates indexes/counters atomically.
    */
   Result completeJob(
-      const std::string& jobId,
-      const std::string& serverType);
+      const string& jobId,
+      const string& serverType);
 
   /** @brief Registers a server instance under its type. */
   void registerServer(
-      const std::string& serverType,
-      const std::string& serverId);
+      const string& serverType,
+      const string& serverId);
 
   /** @brief Refreshes the server heartbeat with a positive TTL in seconds. */
   void refreshHeartbeat(
-      const std::string& serverType,
-      const std::string& serverId,
-      std::int64_t ttlSeconds);
+      const string& serverType,
+      const string& serverId,
+      int64_t ttlSeconds);
 
   /** @brief Discovers server types registered by workers. */
-  std::vector<std::string> getServerTypes();
+  vector<string> getServerTypes();
 
   /** @brief Returns the materialized summary for one server type. */
-  std::map<std::string, std::int64_t> getTypeSummary(
-      const std::string& serverType);
+  map<string, int64_t> getTypeSummary(
+      const string& serverType);
 
   /** @brief Returns registered instances and their summary counters. */
-  std::vector<ServerSummary> getServerSummaries(
-      const std::string& serverType);
+  vector<ServerSummary> getServerSummaries(
+      const string& serverType);
 
   /**
    * @brief Reads current jobs for an instance.
@@ -123,18 +129,18 @@ public:
    * This returns the complete current set; callers should add bounded
    * pagination if an instance can own a large number of jobs.
    */
-  std::vector<Job> getServerJobs(
-      const std::string& serverType,
-      const std::string& serverId);
+  vector<Job> getServerJobs(
+      const string& serverType,
+      const string& serverId);
 
 private:
-  static std::string stateName(State state);
+  static string stateName(State state);
   static void validateIdentifier(
-      const std::string& value,
+      const string& value,
       const char* name,
       bool isServerType = false);
 
-  std::shared_ptr<RedisClient> m_client;
+  shared_ptr<RedisClient> m_client;
 };
 
 #endif // REDIS_JOB_STATUS_H

@@ -10,6 +10,8 @@
 #include <stdexcept>
 #include <utility>
 
+using namespace std;
+
 namespace
 {
 const char* const kCreatePendingScript = R"lua(
@@ -171,81 +173,81 @@ if t ~= 'none' and t ~= 'set' then return redis.error_reply('wrong key type') en
 return redis.call('SADD', KEYS[1], ARGV[1])
 )lua";
 
-std::string jobKey(const std::string& serverType, const std::string& jobId)
+string jobKey(const string& serverType, const string& jobId)
 {
   return "job:{" + serverType + "}:" + jobId;
 }
 
-std::string typeJobsKey(const std::string& serverType)
+string typeJobsKey(const string& serverType)
 {
   return "jobs:type:{" + serverType + "}";
 }
 
-std::string serverJobsKey(
-    const std::string& serverType,
-    const std::string& serverId)
+string serverJobsKey(
+    const string& serverType,
+    const string& serverId)
 {
   return "jobs:server:{" + serverType + "}:" + serverId;
 }
 
-std::string typeSummaryKey(const std::string& serverType)
+string typeSummaryKey(const string& serverType)
 {
   return "summary:type:{" + serverType + "}";
 }
 
-std::string serverSummaryKey(
-    const std::string& serverType,
-    const std::string& serverId)
+string serverSummaryKey(
+    const string& serverType,
+    const string& serverId)
 {
   return "summary:server:{" + serverType + "}:" + serverId;
 }
 
-std::string serverRegistryKey(const std::string& serverType)
+string serverRegistryKey(const string& serverType)
 {
   return "servers:type:{" + serverType + "}";
 }
 
-const std::string kServerTypesKey = "servers:types";
+const string kServerTypesKey = "servers:types";
 
-std::string heartbeatKey(
-    const std::string& serverType,
-    const std::string& serverId)
+string heartbeatKey(
+    const string& serverType,
+    const string& serverId)
 {
   return "heartbeat:server:{" + serverType + "}:" + serverId;
 }
 
-using KeyList = std::vector<std::string>;
-using ArgList = std::vector<std::string>;
+using KeyList = vector<string>;
+using ArgList = vector<string>;
 
 template <typename Redis>
-std::int64_t evalResult(
+int64_t evalResult(
     Redis& redis,
-    const std::string& script,
+    const string& script,
     const KeyList& keys,
     const ArgList& args)
 {
-  return redis.template eval<std::int64_t>(
+  return redis.template eval<int64_t>(
       script, keys.begin(), keys.end(), args.begin(), args.end());
 }
 
 template <typename Redis>
-std::map<std::string, std::int64_t> readCounters(
+map<string, int64_t> readCounters(
     Redis& redis,
-    const std::string& key)
+    const string& key)
 {
-  std::vector<std::pair<std::string, std::string>> fields;
-  redis.hgetall(key, std::back_inserter(fields));
+  vector<pair<string, string>> fields;
+  redis.hgetall(key, back_inserter(fields));
 
-  std::map<std::string, std::int64_t> counters;
+  map<string, int64_t> counters;
   for (const auto& field : fields)
   {
     try
     {
-      counters[field.first] = std::stoll(field.second);
+      counters[field.first] = stoll(field.second);
     }
-    catch (const std::exception&)
+    catch (const exception&)
     {
-      throw std::runtime_error(
+      throw runtime_error(
           "RedisJobStatus: non-integer counter '" + field.first + "'");
     }
   }
@@ -253,10 +255,10 @@ std::map<std::string, std::int64_t> readCounters(
 }
 
 template <typename Redis>
-RedisJobStatus::Job readJob(Redis& redis, const std::string& key)
+RedisJobStatus::Job readJob(Redis& redis, const string& key)
 {
-  std::vector<std::pair<std::string, std::string>> fields;
-  redis.hgetall(key, std::back_inserter(fields));
+  vector<pair<string, string>> fields;
+  redis.hgetall(key, back_inserter(fields));
 
   RedisJobStatus::Job job;
   for (const auto& field : fields)
@@ -292,10 +294,10 @@ RedisJobStatus::RedisJobStatus()
 }
 
 RedisJobStatus::Result RedisJobStatus::createPendingJob(
-    const std::string& jobId,
-    const std::string& serverType,
-    const std::string& serverId,
-    const std::map<std::string, std::string>& fields)
+    const string& jobId,
+    const string& serverType,
+    const string& serverId,
+    const map<string, string>& fields)
 {
   validateIdentifier(jobId, "jobId");
   validateIdentifier(serverType, "serverType", true);
@@ -329,8 +331,8 @@ RedisJobStatus::Result RedisJobStatus::createPendingJob(
 }
 
 RedisJobStatus::Result RedisJobStatus::transitionJob(
-    const std::string& jobId,
-    const std::string& serverType,
+    const string& jobId,
+    const string& serverType,
     State newState)
 {
   validateIdentifier(jobId, "jobId");
@@ -340,13 +342,13 @@ RedisJobStatus::Result RedisJobStatus::transitionJob(
     return Result::InvalidTransition;
   }
 
-  const std::string serverIdKeyPrefix = "jobs:server:{" + serverType + "}:";
-  const std::string summaryPrefix = "summary:server:{" + serverType + "}:";
+  const string serverIdKeyPrefix = "jobs:server:{" + serverType + "}:";
+  const string summaryPrefix = "summary:server:{" + serverType + "}:";
   const auto job = m_client->execute(
       [&](auto& redis)
       {
-        std::vector<std::pair<std::string, std::string>> fields;
-        redis.hgetall(jobKey(serverType, jobId), std::back_inserter(fields));
+        vector<pair<string, string>> fields;
+        redis.hgetall(jobKey(serverType, jobId), back_inserter(fields));
         Job value;
         for (const auto& field : fields)
         {
@@ -361,7 +363,7 @@ RedisJobStatus::Result RedisJobStatus::transitionJob(
     return Result::JobNotFound;
   }
 
-  const std::string newStateName = stateName(newState);
+  const string newStateName = stateName(newState);
   KeyList keys = {
       jobKey(serverType, jobId),
       typeJobsKey(serverType),
@@ -379,8 +381,8 @@ RedisJobStatus::Result RedisJobStatus::transitionJob(
 }
 
 RedisJobStatus::Result RedisJobStatus::completeJob(
-    const std::string& jobId,
-    const std::string& serverType)
+    const string& jobId,
+    const string& serverType)
 {
   validateIdentifier(jobId, "jobId");
   validateIdentifier(serverType, "serverType", true);
@@ -388,8 +390,8 @@ RedisJobStatus::Result RedisJobStatus::completeJob(
   const auto job = m_client->execute(
       [&](auto& redis)
       {
-        std::vector<std::pair<std::string, std::string>> fields;
-        redis.hgetall(jobKey(serverType, jobId), std::back_inserter(fields));
+        vector<pair<string, string>> fields;
+        redis.hgetall(jobKey(serverType, jobId), back_inserter(fields));
         Job value;
         for (const auto& field : fields)
         {
@@ -421,8 +423,8 @@ RedisJobStatus::Result RedisJobStatus::completeJob(
 }
 
 void RedisJobStatus::registerServer(
-    const std::string& serverType,
-    const std::string& serverId)
+    const string& serverType,
+    const string& serverId)
 {
   validateIdentifier(serverType, "serverType", true);
   validateIdentifier(serverId, "serverId");
@@ -443,27 +445,27 @@ void RedisJobStatus::registerServer(
       });
 }
 
-std::vector<std::string> RedisJobStatus::getServerTypes()
+vector<string> RedisJobStatus::getServerTypes()
 {
   return m_client->execute(
       [&](auto& redis)
       {
-        std::vector<std::string> serverTypes;
-        redis.smembers(kServerTypesKey, std::back_inserter(serverTypes));
+        vector<string> serverTypes;
+        redis.smembers(kServerTypesKey, back_inserter(serverTypes));
         return serverTypes;
       });
 }
 
 void RedisJobStatus::refreshHeartbeat(
-    const std::string& serverType,
-    const std::string& serverId,
-    std::int64_t ttlSeconds)
+    const string& serverType,
+    const string& serverId,
+    int64_t ttlSeconds)
 {
   validateIdentifier(serverType, "serverType", true);
   validateIdentifier(serverId, "serverId");
   if (ttlSeconds <= 0)
   {
-    throw std::invalid_argument(
+    throw invalid_argument(
         "RedisJobStatus: heartbeat TTL must be positive");
   }
 
@@ -474,12 +476,12 @@ void RedisJobStatus::refreshHeartbeat(
         redis.set(
             key,
             serverId,
-            std::chrono::seconds(ttlSeconds));
+            chrono::seconds(ttlSeconds));
       });
 }
 
-std::map<std::string, std::int64_t> RedisJobStatus::getTypeSummary(
-    const std::string& serverType)
+map<string, int64_t> RedisJobStatus::getTypeSummary(
+    const string& serverType)
 {
   validateIdentifier(serverType, "serverType", true);
   const auto key = typeSummaryKey(serverType);
@@ -490,8 +492,8 @@ std::map<std::string, std::int64_t> RedisJobStatus::getTypeSummary(
       });
 }
 
-std::vector<RedisJobStatus::ServerSummary>
-RedisJobStatus::getServerSummaries(const std::string& serverType)
+vector<RedisJobStatus::ServerSummary>
+RedisJobStatus::getServerSummaries(const string& serverType)
 {
   validateIdentifier(serverType, "serverType", true);
   const auto registryKey = serverRegistryKey(serverType);
@@ -499,10 +501,10 @@ RedisJobStatus::getServerSummaries(const std::string& serverType)
   return m_client->execute(
       [&](auto& redis)
       {
-        std::vector<std::string> serverIds;
-        redis.smembers(registryKey, std::back_inserter(serverIds));
+        vector<string> serverIds;
+        redis.smembers(registryKey, back_inserter(serverIds));
 
-        std::vector<ServerSummary> summaries;
+        vector<ServerSummary> summaries;
         summaries.reserve(serverIds.size());
         for (const auto& serverId : serverIds)
         {
@@ -516,9 +518,9 @@ RedisJobStatus::getServerSummaries(const std::string& serverType)
       });
 }
 
-std::vector<RedisJobStatus::Job> RedisJobStatus::getServerJobs(
-    const std::string& serverType,
-    const std::string& serverId)
+vector<RedisJobStatus::Job> RedisJobStatus::getServerJobs(
+    const string& serverType,
+    const string& serverId)
 {
   validateIdentifier(serverType, "serverType", true);
   validateIdentifier(serverId, "serverId");
@@ -527,10 +529,10 @@ std::vector<RedisJobStatus::Job> RedisJobStatus::getServerJobs(
   return m_client->execute(
       [&](auto& redis)
       {
-        std::vector<std::string> jobIds;
-        redis.smembers(indexKey, std::back_inserter(jobIds));
+        vector<string> jobIds;
+        redis.smembers(indexKey, back_inserter(jobIds));
 
-        std::vector<Job> jobs;
+        vector<Job> jobs;
         jobs.reserve(jobIds.size());
         for (const auto& jobId : jobIds)
         {
@@ -540,7 +542,7 @@ std::vector<RedisJobStatus::Job> RedisJobStatus::getServerJobs(
       });
 }
 
-std::string RedisJobStatus::stateName(State state)
+string RedisJobStatus::stateName(State state)
 {
   switch (state)
   {
@@ -551,24 +553,24 @@ std::string RedisJobStatus::stateName(State state)
     case State::Suspended:
       return "SUSPENDED";
   }
-  throw std::invalid_argument("RedisJobStatus: unknown state");
+  throw invalid_argument("RedisJobStatus: unknown state");
 }
 
 void RedisJobStatus::validateIdentifier(
-    const std::string& value,
+    const string& value,
     const char* name,
     bool isServerType)
 {
   if (value.empty())
   {
-    throw std::invalid_argument(
-        std::string("RedisJobStatus: ") + name + " must not be empty");
+    throw invalid_argument(
+        string("RedisJobStatus: ") + name + " must not be empty");
   }
   if (isServerType &&
-      (value.find('{') != std::string::npos ||
-       value.find('}') != std::string::npos))
+      (value.find('{') != string::npos ||
+       value.find('}') != string::npos))
   {
-    throw std::invalid_argument(
+    throw invalid_argument(
         "RedisJobStatus: serverType must not contain '{' or '}'");
   }
 }

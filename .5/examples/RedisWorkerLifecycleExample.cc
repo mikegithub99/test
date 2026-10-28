@@ -90,8 +90,8 @@ int main(int argc, char** argv)
   {
     const Options options = parseArgs(argc, argv);
 
-    // Inject configuration before RedisJobStatus/GetClient is constructed.
-    RedisClient::SetConfigProvider([options]
+    // The first GetClient call injects the mock configuration for this process.
+    RedisClient::GetClient([options]
     {
       const auto url = mockGetRegVal("redisUrl", options);
       const auto cluster = mockGetRegVal("isRedisCluster", options);

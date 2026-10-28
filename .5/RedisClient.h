@@ -2,8 +2,7 @@
  * @file RedisClient.h
  * @brief Lazy singleton wrapper for standalone Redis or Redis Cluster.
  *
- * Pass a ConfigProvider to GetClient() on its first call to inject application
- * or test configuration. Without one, environment variables are used.
+ * The default provider reads the application's get_reg_val() registry. Pass a ConfigProvider to Instance() on its first call only when overriding configuration (for example, in tests).
  */
 
 #ifndef REDIS_CLIENT_H
@@ -22,7 +21,7 @@
  * @brief Provides one configured Redis client instance.
  *
  * Configuration is read once during lazy initialization. The first call to
- * GetClient() determines the provider for the process-wide singleton.
+ * Instance() determines the provider for the process-wide singleton.
  */
 class RedisClient final
 {
@@ -44,7 +43,7 @@ public:
    *        provider reads REDIS_URL and REDIS_CLUSTER from the environment.
    *        A supplied provider must be passed on the first call.
    */
-  static std::shared_ptr<RedisClient> GetClient(ConfigProvider provider = {});
+  static std::shared_ptr<RedisClient> Instance(ConfigProvider provider = {});
 
   RedisClient(const RedisClient&) = delete;
   RedisClient& operator=(const RedisClient&) = delete;

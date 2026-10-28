@@ -2,21 +2,19 @@
 
 ## RedisClient configuration injection
 
-Pass an optional provider to `RedisClient::GetClient()` on its first call. This keeps `RedisClient` small: it accepts a callable returning `RedisClient::Config`, while the default provider reads `REDIS_URL` and optional `REDIS_CLUSTER` environment variables.
+Pass an optional provider to `RedisClient::Instance()` on its first call. This keeps `RedisClient` small: it accepts a callable returning `RedisClient::Config`, while the default provider calls the host application's `get_reg_val("redisUrl")` and `get_reg_val("isRedisCluster")`.
 
-Production integration example:
+Production usage:
 
 ```cpp
 // Call after get_reg_val() is initialized and before constructing RedisJobStatus.
-RedisClient::GetClient([] {
-  return RedisClient::Config{
-      get_reg_val("redisUrl"),
-      static_cast<bool>(get_reg_val("isRedisCluster"))};
-});
-RedisJobStatus status;
+// Initialize the application registry first.
+RedisJobStatus status; // default provider calls get_reg_val() automatically
+
+auto client = RedisClient::Instance(); // optional direct access
 ```
 
-Tests and examples can pass a provider returning deterministic mock values. The first `GetClient()` call initializes the singleton; providers passed on later calls are ignored. `REDIS_CLUSTER=true` or `1` enables cluster mode when using the default provider.
+Tests and examples can pass a provider returning deterministic mock values. The first `Instance()` call initializes the singleton; providers passed on later calls are ignored. The default provider accepts `true`/`false`, `1`/`0`, or `yes`/`no` for `isRedisCluster`.
 
 ## Files
 
@@ -56,4 +54,4 @@ redis-plus-plus `eval` passes the Lua script, a key range and an argument range.
 
 ## Build and validation
 
-Requires C++17, redis-plus-plus and hiredis. Link the configuration provider only if adapting to your own registry. Build flags depend on your installation. These sources have not been compiled or integration-tested as part of this repository update; test against the exact client version and both standalone and cluster deployments before production.
+Requires C++17, redis-plus-plus and hiredis. The host application must provide `std::string get_reg_val(const std::string&)` and initialize its configuration registry before the first `RedisClient::Instance()` call. Build flags depend on your installation. These sources have not been compiled or integration-tested as part of this repository update; test against the exact client version and both standalone and cluster deployments before production.

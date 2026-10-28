@@ -82,6 +82,16 @@ This script checks the job, owner, indexes, state and counters. It decrements th
 
 This script receives two keys: `servers:{registry}:types` and `servers:{registry}:type:<serverType>`. Both keys share the literal `{registry}` hash tag, so Redis Cluster routes them to the same slot. The script checks that both keys are either absent or sets before writing, then adds the server type to the global discovery set and the server ID to the type-specific set. One script keeps the two registry updates together without a cross-slot error.
 
+## Redis Cluster hash tags: why and how
+
+Redis Cluster distributes keys among hash slots. For a key containing a non-empty substring inside its first matching `{...}` pair, Redis calculates the slot from that substring rather than the entire key. This lets application key names share a slot when they must be used together in a multi-key operation or Lua script.
+
+In `.5`, job lifecycle keys use the server type as their tag. For example, `job:{query}:job-100`, `jobs:type:{query}`, and `summary:type:{query}` share the `query` tag. This keeps a job's record, indexes, and summaries co-located for lifecycle scripts, while types such as `query` and `order` can be partitioned separately.
+
+Server discovery has a different requirement: `registerServer()` must update both the global type set `servers:{registry}:types` and a type-specific set such as `servers:{registry}:type:query`. They use the same literal `{registry}` tag, which makes the two-key Lua script cluster-safe. The trade-off is that all registry keys share one slot; job data is still partitioned by `{serverType}`.
+
+When writing a multi-key script, list every accessed Redis key in `KEYS` and make sure all of those keys use the same hash tag. Braces containing different text do not co-locate keys.
+
 ## Lua features used by these scripts
 
 | Lua feature | How it is used |
@@ -101,7 +111,7 @@ The scripts deliberately use a small subset of Lua. Most application logic, iden
 ## Important implementation notes
 
 - **Pass keys explicitly.** Redis keys accessed by a script should be provided in the key list and referenced through `KEYS`, not assembled from arbitrary data inside Lua.
-- **Keep Cluster keys co-located.** Job lifecycle keys use the `{serverType}` hash tag. The two server registry keys use the shared literal `{registry}` tag so registration can update them in one script. A script touching keys in different slots will fail in Redis Cluster.
+- **Keep Cluster keys co-located.** Job lifecycle keys use the `{serverType}` hash tag, for example `job:{query}:job-100` and `summary:type:{query}`. The server-discovery keys use the shared literal `{registry}` tag, for example `servers:{registry}:types` and `servers:{registry}:type:query`. Redis Cluster hashes the text inside the first non-empty pair of braces; keys with the same tag map to the same slot. Different tags generally map to different slots, and a script touching keys in different slots will fail in Redis Cluster.
 - **Validate before writing.** The scripts check expected key types and important state before changing data. Keep those checks ahead of the writes.
 - **Keep scripts short.** Redis runs a script without interleaving other commands. Avoid long loops or expensive work.
 - **Treat return values as part of the C++/Lua contract.** The C++ API maps the integer returned by `eval<int64_t>` to its `RedisJobStatus::Result` enum. If a script's return codes change, update and verify the C++ mapping together.

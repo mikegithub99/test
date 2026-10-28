@@ -40,7 +40,7 @@ public:
   /**
    * @brief Gets the process-wide client wrapper, initializing it lazily.
    * @param provider Optional configuration provider. If omitted, the default
-   *        provider reads REDIS_URL and REDIS_CLUSTER from the environment.
+   *        provider reads redisUrl and isRedisCluster through get_reg_val().
    *        A supplied provider must be passed on the first call.
    */
   static std::shared_ptr<RedisClient> Instance(ConfigProvider provider = {});

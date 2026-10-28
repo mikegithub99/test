@@ -37,16 +37,30 @@ The example mocks the values that would ordinarily come from `get_reg_val("redis
 
 | Type | Key pattern | Purpose | Sample data held |
 |---|---|---|---|
-| SET | `servers:{registry}:types` | Global server-type discovery. | `workers`, `schedulers` |
-| SET | `servers:{registry}:type:serverType` | Registered instance IDs for one type. | For `workers`: `worker-01`, `worker-02` |
+| SET | `servers:{registry}:types` | Global server-type discovery. | `query`, `order` |
+| SET | `servers:{registry}:type:serverType` | Registered instance IDs for one type. | For `query`: `query-01`, `query-02` |
 | HASH | `summary:type:{serverType}` | Type-level status counters. | `pending=2`, `active=3`, `suspended=1`, `total=6` |
-| HASH | `summary:server:{serverType}:serverId` | Per-instance counters. | For `worker-01`: `pending=1`, `active=2`, `total=3` |
+| HASH | `summary:server:{serverType}:serverId` | Per-instance counters. | For `query-01`: `pending=1`, `active=2`, `total=3` |
 | HASH | `job:{serverType}:jobId` | Job state, ownership and metadata. | `jobId=job-100`, `status=ACTIVE`, `serverType=workers`, `serverId=worker-01`, plus custom fields |
 | SET | `jobs:type:{serverType}` | Current job IDs for a type. | `job-100`, `job-101`, `job-102` |
-| SET | `jobs:server:{serverType}:serverId` | Current job IDs for an instance. | For `worker-01`: `job-100`, `job-102` |
-| String + TTL | `heartbeat:server:{serverType}:serverId` | Heartbeat health signal. | `worker-01` with a 30-second TTL |
+| SET | `jobs:server:{serverType}:serverId` | Current job IDs for an instance. | For `query-01`: `job-100`, `job-102` |
+| String + TTL | `heartbeat:server:{serverType}:serverId` | Heartbeat health signal. | `query-01` with a 30-second TTL |
 
-The `{serverType}` hash tag keeps lifecycle script keys in one Redis Cluster slot. Both registry keys use the shared literal `{registry}` hash tag, so `registerServer()` can update the global type set and the type-specific instance set in one Lua script without a cross-slot error. This deliberately puts registry writes in one cluster slot; if registration volume becomes very high, that slot may become a hotspot. Redis scripts prevent other commands from interleaving during execution, but they are not general rollback transactions, so the registration script validates both key types before writing.
+## Redis Cluster hash-tag scheme: why and how
+
+Redis Cluster assigns each key to a hash slot. Normally the slot is calculated from the key name, but when a key contains a non-empty substring inside the first matching pair of curly braces, Redis hashes that substring instead. This substring is called the **hash tag**. Keys with the same tag are placed in the same slot, which is required for a Lua script or multi-key command to operate on them together in Redis Cluster.
+
+### Job lifecycle keys use the server type
+
+Job-related keys use `{serverType}` as their hash tag. For example, `job:{query}:job-100`, `jobs:type:{query}`, `jobs:server:{query}:query-01`, `summary:type:{query}`, and `summary:server:{query}:query-01` all hash using `query`. This co-locates the job record, its indexes and its counters so the create, transition and completion scripts can update those related keys together. Different server types, such as `query` and `order`, can be distributed across different slots.
+
+### Server discovery uses a shared registry tag
+
+Server registration needs to update two keys: the global type set `servers:{registry}:types` and a type-specific set such as `servers:{registry}:type:query`. Both use the exact literal tag `{registry}`, so they occupy the same Redis Cluster slot. `registerServer()` passes both keys explicitly to one Lua script, which checks that both are either absent or sets before adding the type and server ID. This avoids the previous two-operation gap, where one registry could be updated while the other failed, and avoids a Cluster cross-slot error.
+
+The registry tag is intentionally different from the `{serverType}` tag: a single global type-discovery set cannot share a slot with every type-partitioned job key. The trade-off is that all server-registry keys share one slot, which could become a hotspot if registration traffic is very high. Job lifecycle data remains partitioned by server type. Lua scripts execute without interleaving from other Redis commands, but they are not general rollback transactions, so the script validates both key types before performing writes.
+
+When adding keys to a script, pass them in the explicit `KEYS` list and ensure every key belongs to the same hash slot. Do not assume that merely having braces somewhere in each key is enough: the text inside the braces must match exactly.
 
 ## Lua scripts: keys, arguments and tables
 

@@ -16,6 +16,16 @@
 
 #include <sw/redis++/redis++.h>
 
+using std::forward;
+using std::function;
+using std::shared_ptr;
+using std::string;
+using std::unique_ptr;
+using std::variant;
+using std::visit;
+using sw::redis::Redis;
+using sw::redis::RedisCluster;
+
 /**
  * @class RedisClient
  * @brief Provides one configured Redis client instance.
@@ -28,14 +38,14 @@ class RedisClient final
 public:
   struct Config
   {
-    std::string redisUrl;
+    string redisUrl;
     bool isCluster = false;
   };
 
-  using ConfigProvider = std::function<Config()>;
-  using Client = std::variant<
-      std::unique_ptr<sw::redis::Redis>,
-      std::unique_ptr<sw::redis::RedisCluster>>;
+  using ConfigProvider = function<Config()>;
+  using Client = variant<
+      unique_ptr<Redis>,
+      unique_ptr<RedisCluster>>;
 
   /**
    * @brief Gets the process-wide client wrapper, initializing it lazily.
@@ -43,7 +53,7 @@ public:
    *        provider reads redisUrl and isRedisCluster through get_reg_val().
    *        A supplied provider must be passed on the first call.
    */
-  static std::shared_ptr<RedisClient> Instance(ConfigProvider provider = {});
+  static shared_ptr<RedisClient> Instance(ConfigProvider provider = {});
 
   RedisClient(const RedisClient&) = delete;
   RedisClient& operator=(const RedisClient&) = delete;
@@ -55,10 +65,10 @@ public:
   template <typename Fn>
   decltype(auto) execute(Fn&& fn)
   {
-    return std::visit(
+    return visit(
         [&fn](auto& client) -> decltype(auto)
         {
-          return std::forward<Fn>(fn)(*client);
+          return forward<Fn>(fn)(*client);
         },
         m_client);
   }

@@ -5,27 +5,49 @@
 
 #include "RedisClient.h"
 
-#include <cstdlib>
+#include <algorithm>
+#include <cctype>
 #include <stdexcept>
 #include <string>
 #include <utility>
 
+// The host application provides this registry lookup.
+std::string get_reg_val(const std::string& key);
+
 namespace
 {
-RedisClient::Config defaultConfigProvider()
+bool parseClusterFlag(std::string value)
 {
-  const char* url = std::getenv("REDIS_URL");
-  const char* cluster = std::getenv("REDIS_CLUSTER");
-  if (!url)
+  std::transform(value.begin(), value.end(), value.begin(),
+                 [](unsigned char ch)
+                 {
+                   return static_cast<char>(std::tolower(ch));
+                 });
+
+  if (value.empty() || value == "false" || value == "0" || value == "no")
   {
-    throw std::invalid_argument(
-        "RedisClient: set REDIS_URL or pass a ConfigProvider to GetClient()");
+    return false;
+  }
+  if (value == "true" || value == "1" || value == "yes")
+  {
+    return true;
   }
 
-  const std::string clusterValue = cluster ? cluster : "false";
+  throw std::invalid_argument(
+      "RedisClient: isRedisCluster must be true/false, 1/0, or yes/no");
+}
+
+RedisClient::Config defaultConfigProvider()
+{
+  const auto url = get_reg_val("redisUrl");
+  if (url.empty())
+  {
+    throw std::invalid_argument(
+        "RedisClient: get_reg_val(\"redisUrl\") returned an empty value");
+  }
+
   return RedisClient::Config{
-      url, clusterValue == "1" || clusterValue == "true" ||
-               clusterValue == "TRUE"};
+      url, parseClusterFlag(get_reg_val("isRedisCluster"))};
 }
 } // namespace
 
@@ -49,7 +71,7 @@ RedisClient::RedisClient(ConfigProvider provider)
   }
 }
 
-std::shared_ptr<RedisClient> RedisClient::GetClient(ConfigProvider provider)
+std::shared_ptr<RedisClient> RedisClient::Instance(ConfigProvider provider)
 {
   static const std::shared_ptr<RedisClient> instance(
       new RedisClient(std::move(provider)));

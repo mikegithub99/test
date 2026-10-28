@@ -23,6 +23,7 @@ using std::size_t;
 using std::streamsize;
 using std::string;
 
+
 namespace
 {
 void initializeApplicationConfiguration()

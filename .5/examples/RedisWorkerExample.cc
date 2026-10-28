@@ -20,9 +20,11 @@
 #include <string>
 #include <thread>
 
+using namespace std;
+
 namespace
 {
-std::atomic<bool> g_running{true};
+atomic<bool> g_running{true};
 
 void onSignal(int)
 {
@@ -34,7 +36,7 @@ void initializeApplicationConfiguration()
   // TODO: initialize the host application's configuration registry before constructing RedisJobStatus.
 }
 
-std::string hostIPv4()
+string hostIPv4()
 {
   ifaddrs* interfaces = nullptr;
   if (getifaddrs(&interfaces) != 0)
@@ -42,7 +44,7 @@ std::string hostIPv4()
     return "127.0.0.1";
   }
 
-  std::string result = "127.0.0.1";
+  string result = "127.0.0.1";
   for (const ifaddrs* item = interfaces; item; item = item->ifa_next)
   {
     if (!item->ifa_addr || item->ifa_addr->sa_family != AF_INET ||
@@ -63,12 +65,12 @@ std::string hostIPv4()
   return result;
 }
 
-std::string randomFiveLetters()
+string randomFiveLetters()
 {
   static constexpr char alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-  std::random_device rd;
-  std::uniform_int_distribution<int> choose(0, 25);
-  std::string suffix;
+  random_device rd;
+  uniform_int_distribution<int> choose(0, 25);
+  string suffix;
   for (int i = 0; i < 5; ++i)
   {
     suffix.push_back(alphabet[choose(rd)]);
@@ -76,18 +78,18 @@ std::string randomFiveLetters()
   return suffix;
 }
 
-std::string parseServerType(int argc, char** argv)
+string parseServerType(int argc, char** argv)
 {
-  const std::string prefix = "--serverType=";
+  const string prefix = "--serverType=";
   for (int i = 1; i < argc; ++i)
   {
-    const std::string arg(argv[i]);
+    const string arg(argv[i]);
     if (arg.rfind(prefix, 0) == 0 && arg.size() > prefix.size())
     {
       return arg.substr(prefix.size());
     }
   }
-  throw std::invalid_argument(
+  throw invalid_argument(
       "Usage: RedisWorkerExample --serverType=query-server-type1");
 }
 } // namespace
@@ -103,29 +105,29 @@ int main(int argc, char** argv)
     RedisJobStatus status;
     status.registerServer(serverType, serverId);
 
-    std::signal(SIGINT, onSignal);
-    std::signal(SIGTERM, onSignal);
+    signal(SIGINT, onSignal);
+    signal(SIGTERM, onSignal);
 
-    constexpr std::int64_t ttlSeconds = 30;
+    constexpr int64_t ttlSeconds = 30;
     status.refreshHeartbeat(serverType, serverId, ttlSeconds);
-    std::cout << "Registered " << serverType << " / " << serverId << '\n';
+    cout << "Registered " << serverType << " / " << serverId << '\n';
 
     while (g_running.load())
     {
-      std::this_thread::sleep_for(std::chrono::seconds(10));
+      this_thread::sleep_for(chrono::seconds(10));
       if (g_running.load())
       {
         status.refreshHeartbeat(serverType, serverId, ttlSeconds);
       }
     }
 
-    std::cout << "Stopping; heartbeat will expire in up to "
+    cout << "Stopping; heartbeat will expire in up to "
               << ttlSeconds << " seconds.\n";
     return EXIT_SUCCESS;
   }
-  catch (const std::exception& ex)
+  catch (const exception& ex)
   {
-    std::cerr << "RedisWorkerExample: " << ex.what() << '\n';
+    cerr << "RedisWorkerExample: " << ex.what() << '\n';
     return EXIT_FAILURE;
   }
 }

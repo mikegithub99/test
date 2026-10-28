@@ -29,6 +29,7 @@ using std::runtime_error;
 using std::string;
 using std::to_string;
 
+
 namespace
 {
 struct Options

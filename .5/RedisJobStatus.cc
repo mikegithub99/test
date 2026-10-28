@@ -179,9 +179,19 @@ return 0
 )lua";
 
 const char* const kRegisterServerScript = R"lua(
-local t = redis.call('TYPE', KEYS[1]).ok
-if t ~= 'none' and t ~= 'set' then return redis.error_reply('wrong key type') end
-return redis.call('SADD', KEYS[1], ARGV[1])
+local function validtype(key)
+  local t = redis.call('TYPE', key).ok
+  return t == 'none' or t == 'set'
+end
+
+-- Validate both keys before either write so a wrong-type key cannot leave
+-- the two registries out of sync.
+if not validtype(KEYS[1]) or not validtype(KEYS[2]) then
+  return redis.error_reply('wrong key type')
+end
+
+redis.call('SADD', KEYS[1], ARGV[1])
+return redis.call('SADD', KEYS[2], ARGV[2])
 )lua";
 
 string jobKey(const string& serverType, const string& jobId)
@@ -215,10 +225,10 @@ string serverSummaryKey(
 
 string serverRegistryKey(const string& serverType)
 {
-  return "servers:type:{" + serverType + "}";
+  return "servers:{registry}:type:" + serverType;
 }
 
-const string kServerTypesKey = "servers:types";
+const string kServerTypesKey = "servers:{registry}:types";
 
 string heartbeatKey(
     const string& serverType,
@@ -439,16 +449,13 @@ void RedisJobStatus::registerServer(
 {
   validateIdentifier(serverType, "serverType", true);
   validateIdentifier(serverId, "serverId");
-  const KeyList keys = {serverRegistryKey(serverType)};
-  const ArgList args = {serverId};
+  const KeyList keys = {
+      kServerTypesKey,
+      serverRegistryKey(serverType)};
+  const ArgList args = {serverType, serverId};
 
-  // Global and type-local registries are separate single-key operations.
-  m_client->execute(
-      [&](auto& redis)
-      {
-        return redis.sadd(kServerTypesKey, serverType);
-      });
-
+  // Both registry keys share the {registry} hash tag, so one script can
+  // update them atomically in standalone Redis and Redis Cluster.
   m_client->execute(
       [&](auto& redis)
       {

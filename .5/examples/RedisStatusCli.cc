@@ -11,7 +11,17 @@
 #include <map>
 #include <string>
 
-using namespace std;
+using std::cerr;
+using std::cin;
+using std::cout;
+using std::exception;
+using std::int64_t;
+using std::map;
+using std::numeric_limits;
+using std::runtime_error;
+using std::size_t;
+using std::streamsize;
+using std::string;
 
 namespace
 {

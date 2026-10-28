@@ -36,7 +36,7 @@ local serverType = ARGV[2]
 local serverId = ARGV[3]
 local fields = {'jobId', jobId, 'status', 'PENDING',
                 'serverType', serverType, 'serverId', serverId}
-for i = 5, #ARGV, 2 do
+for i = 4, #ARGV, 2 do
   table.insert(fields, ARGV[i])
   table.insert(fields, ARGV[i + 1])
 end
@@ -74,7 +74,7 @@ local old = redis.call('HGET', KEYS[1], 'status')
 local storedType = redis.call('HGET', KEYS[1], 'serverType')
 local storedServer = redis.call('HGET', KEYS[1], 'serverId')
 local newState = ARGV[4]
-if storedType ~= ARGV[2] or not storedServer or not old then
+if storedType ~= ARGV[2] or storedServer ~= ARGV[3] or not old then
   return 4
 end
 if not redis.call('SISMEMBER', KEYS[2], ARGV[1]) or
@@ -133,7 +133,8 @@ end
 
 local status = redis.call('HGET', KEYS[1], 'status')
 local storedType = redis.call('HGET', KEYS[1], 'serverType')
-if storedType ~= ARGV[2] or not status then
+local storedServer = redis.call('HGET', KEYS[1], 'serverId')
+if storedType ~= ARGV[2] or storedServer ~= ARGV[3] or not status then
   return 4
 end
 if not redis.call('SISMEMBER', KEYS[2], ARGV[1]) or
@@ -407,7 +408,7 @@ RedisJobStatus::Result RedisJobStatus::completeJob(
       serverJobsKey(serverType, job.serverId),
       typeSummaryKey(serverType),
       serverSummaryKey(serverType, job.serverId)};
-  ArgList args = {jobId, serverType};
+  ArgList args = {jobId, serverType, job.serverId};
 
   const auto result = m_client->execute(
       [&](auto& redis)

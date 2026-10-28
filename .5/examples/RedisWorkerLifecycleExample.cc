@@ -19,7 +19,15 @@
 #include <stdexcept>
 #include <string>
 
-using namespace std;
+using std::cerr;
+using std::cout;
+using std::exception;
+using std::hash;
+using std::invalid_argument;
+using std::map;
+using std::runtime_error;
+using std::string;
+using std::to_string;
 
 namespace
 {

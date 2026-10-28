@@ -6,9 +6,8 @@
  *   ./RedisWorkerLifecycleExample --serverType=query-server-type1
  *       [--redisUrl=redis://127.0.0.1:6379] [--cluster=false]
  *
- * The default configuration provider below is a mock equivalent of the
- * application's get_reg_val("redisUrl") and get_reg_val("isRedisCluster").
- * Replace mockGetRegVal() with your real registry lookup for application use.
+ * This standalone example injects a mock provider on first use. Production
+ * code can omit the provider; RedisClient's default provider calls get_reg_val().
  */
 
 #include "RedisJobStatus.h"
@@ -90,8 +89,8 @@ int main(int argc, char** argv)
   {
     const Options options = parseArgs(argc, argv);
 
-    // The first GetClient call injects the mock configuration for this process.
-    RedisClient::GetClient([options]
+    // The first Instance call injects the mock configuration for this process.
+    RedisClient::Instance([options]
     {
       const auto url = mockGetRegVal("redisUrl", options);
       const auto cluster = mockGetRegVal("isRedisCluster", options);

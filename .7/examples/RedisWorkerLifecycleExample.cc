@@ -145,7 +145,7 @@ int main(int argc, char** argv)
       cout << "createPendingJob result="
            << resultName(api.createPendingJob("")) << '\n';
       cout << "getServerTypes count=" << api.getServerTypes().size() << '\n';
-      api.registerServer("", "");
+      api.registerServer();
       api.refreshHeartbeat(0);
       cout << "Read methods return empty collections; void methods are no-ops.\n";
       return EXIT_SUCCESS;

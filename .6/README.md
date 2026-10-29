@@ -46,9 +46,10 @@ Run with `--statusEnabled=false` to demonstrate the disabled path without connec
 ```sh
 ./RedisWorkerLifecycleExample --serverType=query-server-type1
 ./RedisWorkerLifecycleExample --serverType=query-server-type1 --redisUrl=redis://127.0.0.1:6379 --cluster=false
+./RedisWorkerLifecycleExample --serverType=query-server-type1 --statusEnabled=false
 ```
 
-The example mocks the values that would ordinarily come from `get_reg_val("redisUrl")` and `get_reg_val("isRedisCluster")`, then calls `registerServer`, `refreshHeartbeat`, `createPendingJob`, `getServerTypes`, `getTypeSummary`, `getServerSummaries`, `getServerJobs`, all valid `transitionJob` transitions, and `completeJob`. It uses a deterministic demo job ID, so rerunning against the same Redis data may report `JobAlreadyExists`; use a fresh server type or remove the prior demo record.
+When enabled, the example injects mock values for `redisUrl` and `isRedisCluster` and calls `registerServer`, `refreshHeartbeat`, `createPendingJob`, `getServerTypes`, `getTypeSummary`, `getServerSummaries`, `getServerJobs`, all valid `transitionJob` transitions, and `completeJob`. With `--statusEnabled=false`, it skips Redis client initialization, shows the `Disabled` result, and verifies that reads are empty and void operations are no-ops. The enabled path uses a deterministic demo job ID, so rerunning against the same Redis data may report `JobAlreadyExists`; use a fresh server type or remove the prior demo record.
 
 ## Redis data structures
 

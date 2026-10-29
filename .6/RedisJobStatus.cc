@@ -194,7 +194,10 @@ RedisJobStatus::Result RedisJobStatus::createPendingJob(
     const string& serverId,
     const map<string, string>& fields)
 {
-  if (!m_enabled) return Result::Disabled;
+  if (!m_enabled)
+  {
+    return Result::Disabled;
+  }
   validateIdentifier(jobId, "jobId");
   validateIdentifier(serverType, "serverType", true);
   validateIdentifier(serverId, "serverId");
@@ -231,7 +234,10 @@ RedisJobStatus::Result RedisJobStatus::transitionJob(
     const string& serverType,
     State newState)
 {
-  if (!m_enabled) return Result::Disabled;
+  if (!m_enabled)
+  {
+    return Result::Disabled;
+  }
   validateIdentifier(jobId, "jobId");
   validateIdentifier(serverType, "serverType", true);
   if (newState == State::Pending)
@@ -249,8 +255,14 @@ RedisJobStatus::Result RedisJobStatus::transitionJob(
         Job value;
         for (const auto& field : fields)
         {
-          if (field.first == "serverId") value.serverId = field.second;
-          if (field.first == "serverType") value.serverType = field.second;
+          if (field.first == "serverId")
+          {
+            value.serverId = field.second;
+          }
+          if (field.first == "serverType")
+          {
+            value.serverType = field.second;
+          }
         }
         return value;
       });
@@ -281,7 +293,10 @@ RedisJobStatus::Result RedisJobStatus::completeJob(
     const string& jobId,
     const string& serverType)
 {
-  if (!m_enabled) return Result::Disabled;
+  if (!m_enabled)
+  {
+    return Result::Disabled;
+  }
   validateIdentifier(jobId, "jobId");
   validateIdentifier(serverType, "serverType", true);
 
@@ -293,8 +308,14 @@ RedisJobStatus::Result RedisJobStatus::completeJob(
         Job value;
         for (const auto& field : fields)
         {
-          if (field.first == "serverId") value.serverId = field.second;
-          if (field.first == "serverType") value.serverType = field.second;
+          if (field.first == "serverId")
+          {
+            value.serverId = field.second;
+          }
+          if (field.first == "serverType")
+          {
+            value.serverType = field.second;
+          }
         }
         return value;
       });
@@ -324,7 +345,10 @@ void RedisJobStatus::registerServer(
     const string& serverType,
     const string& serverId)
 {
-  if (!m_enabled) return;
+  if (!m_enabled)
+  {
+    return;
+  }
   validateIdentifier(serverType, "serverType", true);
   validateIdentifier(serverId, "serverId");
   const KeyList keys = {
@@ -343,7 +367,10 @@ void RedisJobStatus::registerServer(
 
 vector<string> RedisJobStatus::getServerTypes()
 {
-  if (!m_enabled) return {};
+  if (!m_enabled)
+  {
+    return {};
+  }
   return m_client->execute(
       [&](auto& redis)
       {
@@ -358,7 +385,10 @@ void RedisJobStatus::refreshHeartbeat(
     const string& serverId,
     int64_t ttlSeconds)
 {
-  if (!m_enabled) return;
+  if (!m_enabled)
+  {
+    return;
+  }
   validateIdentifier(serverType, "serverType", true);
   validateIdentifier(serverId, "serverId");
   if (ttlSeconds <= 0)
@@ -381,7 +411,10 @@ void RedisJobStatus::refreshHeartbeat(
 map<string, int64_t> RedisJobStatus::getTypeSummary(
     const string& serverType)
 {
-  if (!m_enabled) return {};
+  if (!m_enabled)
+  {
+    return {};
+  }
   validateIdentifier(serverType, "serverType", true);
   const auto key = typeSummaryKey(serverType);
   return m_client->execute(
@@ -394,7 +427,10 @@ map<string, int64_t> RedisJobStatus::getTypeSummary(
 vector<RedisJobStatus::ServerSummary>
 RedisJobStatus::getServerSummaries(const string& serverType)
 {
-  if (!m_enabled) return {};
+  if (!m_enabled)
+  {
+    return {};
+  }
   validateIdentifier(serverType, "serverType", true);
   const auto registryKey = serverRegistryKey(serverType);
 
@@ -422,7 +458,10 @@ vector<RedisJobStatus::Job> RedisJobStatus::getServerJobs(
     const string& serverType,
     const string& serverId)
 {
-  if (!m_enabled) return {};
+  if (!m_enabled)
+  {
+    return {};
+  }
   validateIdentifier(serverType, "serverType", true);
   validateIdentifier(serverId, "serverId");
   const auto indexKey = serverJobsKey(serverType, serverId);

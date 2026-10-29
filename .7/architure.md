@@ -52,11 +52,11 @@ The patterns below reflect the current C++ key builders in `RedisJobStatus.cc` a
 | SET | `jobs:server:{serverType}:serverId` | `serverType` | Composite references for current jobs owned by one replica. |
 | STRING + TTL | `heartbeat:server:{serverType}:serverId` | `serverType` | Heartbeat value for a replica; expiry is controlled by the configured TTL. |
 
-Example: `job:{query}:7:query-01:job-100`, `jobs:type:{query}`, `jobs:server:{query}:query-01`, `summary:type:{query}`, and `summary:server:{query}:query-01` all hash using the tag `query` and therefore map to the same cluster slot. The registry keys instead use `{registry}` so the two keys used by server registration share a slot.
+Example: `job:{query}:8:query-01:job-100`, `jobs:type:{query}`, `jobs:server:{query}:query-01`, `summary:type:{query}`, and `summary:server:{query}:query-01` all hash using the tag `query` and therefore map to the same cluster slot. The registry keys instead use `{registry}` so the two keys used by server registration share a slot.
 
 ### Hash-tag and Cluster constraints
 
-Redis hashes the text inside the first non-empty pair of braces. For example, in `job:{query}:7:query-01:job-100`, the tag is `query`; the braces are delimiters, not part of the tag value. Keys with the same tag map to the same slot. A Lua script in Redis Cluster must receive all keys it accesses explicitly through `KEYS`, and those keys must be in the same slot.
+Redis hashes the text inside the first non-empty pair of braces. For example, in `job:{query}:8:query-01:job-100`, the tag is `query`; the braces are delimiters, not part of the tag value. Keys with the same tag map to the same slot. A Lua script in Redis Cluster must receive all keys it accesses explicitly through `KEYS`, and those keys must be in the same slot.
 
 The current partitioning unit is `serverType`, not `serverId`. This is what allows a type summary and each replica's summary to be updated by the same lifecycle script. It also means all jobs of one type share a slot. Changing to per-replica tags would spread traffic more widely, but a single script could no longer atomically update both a per-replica job record and one global per-type summary unless the data model or aggregation path changed.
 
@@ -93,7 +93,7 @@ The summary APIs avoid scanning every job to render the overview. `getServerSumm
 ### Costs and risks
 
 - **Hot-slot risk:** every key for one server type shares one slot, so a very busy type may bottleneck on one primary.
-- **Duplicate job-ID risk:** `job:{serverType}:<serverId-length>:<serverId>:<jobId>` does not include `serverId`; equal IDs within the same type collide across replicas.
+- **Duplicate job-ID risk:** the composite reference includes `serverId` and `jobId`, so equal application job IDs on different replicas of the same type remain distinct.
 - **Counter drift risk:** any untracked mutation, manual key change, or future lifecycle path can make materialized summaries inconsistent unless repaired.
 - **Read fan-out by replica:** `getServerSummaries()` performs one summary read per registered server, which is reasonable for modest fleets but can become noticeable with very large fleets or frequent refreshes.
 - **No completed-job history:** completion deletes the hash and indexes, limiting post-completion audit and UI history.

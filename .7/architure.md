@@ -43,14 +43,14 @@ The patterns below reflect the current C++ key builders in `RedisJobStatus.cc` a
 
 | Redis type | Key pattern | Hash tag used by Redis Cluster | Purpose / sample content |
 |---|---|---|---|
-| SET | `servers:{registry}:types` | `registry` | Global server-type discovery; members such as `query`, `order`. |
-| SET | `servers:{registry}:type:serverType` | `registry` | Registered server IDs for one type, e.g. `query-01`, `query-02`. |
-| HASH | `summary:type:{serverType}` | `serverType` | Type summary: `pending`, `active`, `suspended`, `total`. |
-| HASH | `summary:server:{serverType}:serverId` | `serverType` | Per-replica summary with the same counter fields. |
-| HASH | `job:{serverType}:<serverId-length>:<serverId>:<jobId>` | `serverType` | Job state, ownership and optional metadata; includes `jobId`, `status`, `serverType`, `serverId`. |
-| SET | `jobs:type:{serverType}` | `serverType` | Composite references for current jobs of a server type. |
-| SET | `jobs:server:{serverType}:serverId` | `serverType` | Composite references for current jobs owned by one replica. |
-| STRING + TTL | `heartbeat:server:{serverType}:serverId` | `serverType` | Heartbeat value for a replica; expiry is controlled by the configured TTL. |
+| SET | `servers:{registry}:types` | `registry` | Global server-type discovery. Example members: `query`, `order`. |
+| SET | `servers:{registry}:type:serverType` | `registry` | Registered server IDs for one type. For `servers:{registry}:type:query`, example members: `query-01`, `query-02`. |
+| HASH | `summary:type:{serverType}` | `serverType` | Type-level counters. Example key `summary:type:{query}`: `pending=3`, `active=5`, `suspended=1`, `total=9`. |
+| HASH | `summary:server:{serverType}:serverId` | `serverType` | Per-replica counters. Example key `summary:server:{query}:query-01`: `pending=1`, `active=2`, `suspended=0`, `total=3`. |
+| HASH | `job:{serverType}:<serverId-length>:<serverId>:<jobId>` | `serverType` | Job state, ownership, and optional metadata. Example key `job:{query}:8:query-01:job-100`: `jobId=job-100`, `status=PENDING`, `serverType=query`, `serverId=query-01`, plus any metadata fields. |
+| SET | `jobs:type:{serverType}` | `serverType` | Composite references for current jobs of a server type. Example key `jobs:type:{query}` contains `8:query-01:job-100`, `8:query-02:job-100`. |
+| SET | `jobs:server:{serverType}:serverId` | `serverType` | Composite references for current jobs owned by one replica. Example key `jobs:server:{query}:query-01` contains `8:query-01:job-100`; the corresponding `query-02` set contains `8:query-02:job-100`. |
+| STRING + TTL | `heartbeat:server:{serverType}:serverId` | `serverType` | Heartbeat value for a replica. Example key `heartbeat:server:{query}:query-01` has a value such as `1` and an expiry set by the configured TTL. |
 
 Example: `job:{query}:8:query-01:job-100`, `jobs:type:{query}`, `jobs:server:{query}:query-01`, `summary:type:{query}`, and `summary:server:{query}:query-01` all hash using the tag `query` and therefore map to the same cluster slot. The registry keys instead use `{registry}` so the two keys used by server registration share a slot.
 

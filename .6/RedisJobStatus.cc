@@ -31,6 +31,8 @@ string get_reg_val(const string& key);
 
 namespace
 {
+#include "RedisJobScripts.inc"
+
 
 string jobKey(const string& serverType, const string& jobId)
 {

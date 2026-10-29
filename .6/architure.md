@@ -1,6 +1,6 @@
 # Redis Job Status Architecture (.6)
 
-![Redis job-status architecture](architecture.png)
+![Redis job-status architecture](architecture.svg)
 
 ## 1. Executive summary
 
@@ -21,7 +21,7 @@ Redis Cluster hash tags are deliberate:
 
 ### Components and data flow
 
-![Architecture diagram](architecture.png)
+![Architecture diagram](architecture.svg)
 
 1. **Server replicas** register their `serverType` and `serverId`, refresh a TTL-based heartbeat, and report job lifecycle changes.
 2. **RedisJobStatus (C++17)** validates identifiers, constructs keys, calls the configured RedisClient, and maps Lua result codes to the public result enum. Status reporting can be disabled through `redisJobStatusEnabled`.

@@ -43,9 +43,18 @@ struct Options
 // Mock configuration registry for this standalone example.
 string mockGetRegVal(const string& key, const Options& options)
 {
-  if (key == "redisUrl") return options.redisUrl;
-  if (key == "isRedisCluster") return options.cluster ? "true" : "false";
-  if (key == "redisJobStatusEnabled") return options.statusEnabled ? "true" : "false";
+  if (key == "redisUrl")
+  {
+    return options.redisUrl;
+  }
+  if (key == "isRedisCluster")
+  {
+    return options.cluster ? "true" : "false";
+  }
+  if (key == "redisJobStatusEnabled")
+  {
+    return options.statusEnabled ? "true" : "false";
+  }
   throw invalid_argument("Unknown mock configuration key: " + key);
 }
 

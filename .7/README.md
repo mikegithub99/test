@@ -60,9 +60,9 @@ When enabled, the example injects mock values for `redisUrl` and `isRedisCluster
 | SET | `servers:{registry}:type:serverType` | Registered instance IDs for one type. | For `query`: `query-01`, `query-02` |
 | HASH | `summary:type:{serverType}` | Type-level status counters. | `pending=2`, `active=3`, `suspended=1`, `total=6` |
 | HASH | `summary:server:{serverType}:serverId` | Per-instance counters. | For `query-01`: `pending=1`, `active=2`, `total=3` |
-| HASH | `job:{serverType}:<serverId-length>:serverId:jobId` | Job state, ownership and metadata. | `jobId=job-100`, `status=ACTIVE`, `serverType=query`, `serverId=query-01`, plus custom fields |
-| SET | `jobs:type:{serverType}` | Current job IDs for a type. | `job-100`, `job-101`, `job-102` |
-| SET | `jobs:server:{serverType}:serverId` | Current job IDs for an instance. | For `query-01`: `job-100`, `job-102` |
+| HASH | `job:{serverType}:<serverId-length>:<serverId>:<jobId>` | Job state, ownership and metadata. | `jobId=job-100`, `status=ACTIVE`, `serverType=query`, `serverId=query-01`, plus custom fields |
+| SET | `jobs:type:{serverType}` | Composite references for current jobs of a type. | `7:query-01:job-100`, `7:query-01:job-101`, `7:query-02:job-100` |
+| SET | `jobs:server:{serverType}:serverId` | Composite references for jobs owned by an instance. | For `query-01`: `7:query-01:job-100`, `7:query-01:job-102` |
 | String + TTL | `heartbeat:server:{serverType}:serverId` | Heartbeat health signal. | `query-01` with a 30-second TTL |
 
 ## Redis Cluster hash-tag scheme: why and how

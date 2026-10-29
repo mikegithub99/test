@@ -35,6 +35,7 @@ Tests and examples can pass a provider returning deterministic mock values. The 
 
 - `RedisClient.h/.cc`: client selection and injectable configuration.
 - `RedisJobStatus.h/.cc`: optional job lifecycle and dashboard APIs; controlled by `redisJobStatusEnabled`.
+- `RedisJobScripts.inc`: Lua scripts stored as C++ raw string literals and included by `RedisJobStatus.cc` to keep the main implementation readable without a generator or runtime script files.
 - `examples/RedisWorkerExample.cc`: worker registration and heartbeat.
 - `examples/RedisStatusCli.cc`: interactive type → instance → jobs drill-down.
 - `examples/RedisWorkerLifecycleExample.cc`: end-to-end demonstration of every public RedisJobStatus API.
@@ -81,6 +82,9 @@ The registry tag is intentionally different from the `{serverType}` tag: a singl
 When adding keys to a script, pass them in the explicit `KEYS` list and ensure every key belongs to the same hash slot. Do not assume that merely having braces somewhere in each key is enough: the text inside the braces must match exactly.
 
 ## Lua scripts: keys, arguments and tables
+
+The Lua scripts are kept in `RedisJobScripts.inc` as C++ raw string literals. This keeps them together and out of the main implementation file, while avoiding a generator and runtime file-path dependencies. Edit the script text in that include file; it is not a standalone `.lua` file.
+
 
 redis-plus-plus `eval` passes the Lua script, a key range and an argument range. `KEYS[1]`/ `KEYS[2]` are supplied Redis keys; `ARGV[1]`/ `ARGV[2]` are non-key arguments. Lua tables are one-indexed arrays. For example, `local fields = {'status', 'PENDING'}` and `redis.call('HSET', KEYS[1], unpack(fields))` expands the table into the arguments to `HSET`. Other calls include `SADD` for set membership, `HGET` for a field read, and `HINCRBY` for counters. Keep scripts short: they execute atomically on the serving node but block other commands while running.
 

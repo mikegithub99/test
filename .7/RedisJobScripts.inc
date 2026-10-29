@@ -57,7 +57,7 @@ local serverId = ARGV[3]
 local reference = ARGV[4]
 local fields = {'jobId', jobId, 'status', 'PENDING',
                 'serverType', serverType, 'serverId', serverId}
-for i = 4, #ARGV, 2 do
+for i = 5, #ARGV, 2 do
   table.insert(fields, ARGV[i])
   table.insert(fields, ARGV[i + 1])
 end

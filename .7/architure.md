@@ -47,9 +47,9 @@ The patterns below reflect the current C++ key builders in `RedisJobStatus.cc` a
 | SET | `servers:{registry}:type:serverType` | `registry` | Registered server IDs for one type, e.g. `query-01`, `query-02`. |
 | HASH | `summary:type:{serverType}` | `serverType` | Type summary: `pending`, `active`, `suspended`, `total`. |
 | HASH | `summary:server:{serverType}:serverId` | `serverType` | Per-replica summary with the same counter fields. |
-| HASH | `job:{serverType}:<serverId-length>:serverId:jobId` | `serverType` | Job state, ownership and optional metadata; includes `jobId`, `status`, `serverType`, `serverId`. |
-| SET | `jobs:type:{serverType}` | `serverType` | Current job IDs for a server type. |
-| SET | `jobs:server:{serverType}:serverId` | `serverType` | Current job IDs owned by one replica. |
+| HASH | `job:{serverType}:<serverId-length>:<serverId>:<jobId>` | `serverType` | Job state, ownership and optional metadata; includes `jobId`, `status`, `serverType`, `serverId`. |
+| SET | `jobs:type:{serverType}` | `serverType` | Composite references for current jobs of a server type. |
+| SET | `jobs:server:{serverType}:serverId` | `serverType` | Composite references for current jobs owned by one replica. |
 | STRING + TTL | `heartbeat:server:{serverType}:serverId` | `serverType` | Heartbeat value for a replica; expiry is controlled by the configured TTL. |
 
 Example: `job:{query}:7:query-01:job-100`, `jobs:type:{query}`, `jobs:server:{query}:query-01`, `summary:type:{query}`, and `summary:server:{query}:query-01` all hash using the tag `query` and therefore map to the same cluster slot. The registry keys instead use `{registry}` so the two keys used by server registration share a slot.
@@ -93,7 +93,7 @@ The summary APIs avoid scanning every job to render the overview. `getServerSumm
 ### Costs and risks
 
 - **Hot-slot risk:** every key for one server type shares one slot, so a very busy type may bottleneck on one primary.
-- **Duplicate job-ID risk:** `job:{serverType}:<serverId-length>:serverId:jobId` does not include `serverId`; equal IDs within the same type collide across replicas.
+- **Duplicate job-ID risk:** `job:{serverType}:<serverId-length>:<serverId>:<jobId>` does not include `serverId`; equal IDs within the same type collide across replicas.
 - **Counter drift risk:** any untracked mutation, manual key change, or future lifecycle path can make materialized summaries inconsistent unless repaired.
 - **Read fan-out by replica:** `getServerSummaries()` performs one summary read per registered server, which is reasonable for modest fleets but can become noticeable with very large fleets or frequent refreshes.
 - **No completed-job history:** completion deletes the hash and indexes, limiting post-completion audit and UI history.

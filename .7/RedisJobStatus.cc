@@ -195,8 +195,6 @@ RedisJobStatus::RedisJobStatus(ConfigProvider provider)
   m_serverId = config.serverId;
   if (m_enabled)
   {
-    validateIdentifier(m_serverType, "serverType", true);
-    validateIdentifier(m_serverId, "serverId");
     m_client = RedisClient::Instance();
   }
 }
@@ -209,6 +207,8 @@ RedisJobStatus::Result RedisJobStatus::createPendingJob(
   {
     return Result::Disabled;
   }
+  validateIdentifier(m_serverType, "serverType", true);
+  validateIdentifier(m_serverId, "serverId");
   validateIdentifier(jobId, "jobId");
   const string reference = jobReference(m_serverId, jobId);
   KeyList keys = {
@@ -235,6 +235,8 @@ RedisJobStatus::Result RedisJobStatus::transitionJob(
     State newState)
 {
   if (!m_enabled) return Result::Disabled;
+  validateIdentifier(m_serverType, "serverType", true);
+  validateIdentifier(m_serverId, "serverId");
   validateIdentifier(jobId, "jobId");
   if (newState == State::Pending) return Result::InvalidTransition;
   const string reference = jobReference(m_serverId, jobId);
@@ -254,6 +256,8 @@ RedisJobStatus::Result RedisJobStatus::transitionJob(
 RedisJobStatus::Result RedisJobStatus::completeJob(const string& jobId)
 {
   if (!m_enabled) return Result::Disabled;
+  validateIdentifier(m_serverType, "serverType", true);
+  validateIdentifier(m_serverId, "serverId");
   validateIdentifier(jobId, "jobId");
   const string reference = jobReference(m_serverId, jobId);
   KeyList keys = {
@@ -271,6 +275,8 @@ RedisJobStatus::Result RedisJobStatus::completeJob(const string& jobId)
 void RedisJobStatus::registerServer()
 {
   if (!m_enabled) return;
+  validateIdentifier(m_serverType, "serverType", true);
+  validateIdentifier(m_serverId, "serverId");
   const KeyList keys = {kServerTypesKey, serverRegistryKey(m_serverType)};
   const ArgList args = {m_serverType, m_serverId};
 
@@ -301,6 +307,8 @@ vector<string> RedisJobStatus::getServerTypes()
 void RedisJobStatus::refreshHeartbeat(int64_t ttlSeconds)
 {
   if (!m_enabled) return;
+  validateIdentifier(m_serverType, "serverType", true);
+  validateIdentifier(m_serverId, "serverId");
   if (ttlSeconds <= 0)
   {
     throw invalid_argument(

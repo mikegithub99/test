@@ -5,8 +5,8 @@
 
 #include "RedisJobStatus.h"
 
-#include <chrono>
 #include <algorithm>
+#include <chrono>
 #include <cctype>
 #include <iterator>
 #include <stdexcept>
@@ -26,6 +26,8 @@ using std::stoll;
 using std::string;
 using std::vector;
 
+// The host application provides this registry lookup.
+string get_reg_val(const string& key);
 
 namespace
 {

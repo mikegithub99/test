@@ -22,9 +22,9 @@ Pass an optional provider to `RedisClient::Instance()` on its first call. This k
 Production usage:
 
 ```cpp
-// Call after get_reg_val() is initialized and before constructing RedisJobStatus.
-// Initialize the application registry first.
-RedisJobStatus status; // default provider calls get_reg_val() automatically
+// Initialize the application registry first, including redisJobStatusEnabled.
+// Set redisJobStatusEnabled=false to disable status reporting without Redis.
+RedisJobStatus status; // reads redisJobStatusEnabled, then RedisClient settings
 
 auto client = RedisClient::Instance(); // optional direct access
 ```

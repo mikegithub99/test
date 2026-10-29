@@ -60,7 +60,7 @@ This script:
 1. Checks whether the job hash already exists.
 2. Checks that the index keys are sets (or do not exist) and summary keys are hashes (or do not exist).
 3. Builds a list of hash field/value pairs, including the initial `PENDING` status and server ownership.
-4. Writes the job hash, adds the job ID to the type and server sets, and increments pending and total counters for both summaries.
+4. Writes the job hash, adds the composite reference to the type and server sets, and increments pending and total counters for both summaries.
 
 Optional job fields arrive in `ARGV` as alternating field/value pairs. Lua's `table.insert` appends them to the `fields` table, and `unpack(fields)` passes the table's entries as individual arguments to `HSET`.
 

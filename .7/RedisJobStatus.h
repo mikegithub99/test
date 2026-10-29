@@ -25,9 +25,10 @@
  * instances are tracked in servers:{registry}:type:serverType. Both registry
  * keys share the {registry} Redis Cluster hash tag for atomic registration.
  *
- * All lifecycle keys use the server type as their Redis Cluster hash tag.
- * The caller supplies serverType as a routing hint; Lua scripts validate
- * ownership against the stored job HASH before changing state.
+ * All lifecycle keys use the configured server type as their Redis Cluster
+ * hash tag. Worker identity is captured once in Config; Lua scripts validate
+ * ownership against the stored job HASH before changing state. Read-only
+ * dashboard calls can use an empty server identity.
  */
 class RedisJobStatus final
 {

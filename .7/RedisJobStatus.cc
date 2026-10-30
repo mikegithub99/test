@@ -155,21 +155,20 @@ RedisJobStatus::Job readJob(Redis& redis, const string& key)
 }
 } // namespace
 
-namespace
+bool RedisJobStatus::parseEnabledFlag(const string& value)
 {
-bool parseEnabledFlag(string value)
-{
-  transform(value.begin(), value.end(), value.begin(),
+  string normalized = value;
+  transform(normalized.begin(), normalized.end(), normalized.begin(),
             [](unsigned char ch)
             {
               return static_cast<char>(tolower(ch));
             });
 
-  if (value.empty() || value == "true" || value == "1" || value == "yes")
+  if (normalized.empty() || normalized == "true" || normalized == "1" || normalized == "yes")
   {
     return true;
   }
-  if (value == "false" || value == "0" || value == "no")
+  if (normalized == "false" || normalized == "0" || normalized == "no")
   {
     return false;
   }
@@ -177,19 +176,18 @@ bool parseEnabledFlag(string value)
       "RedisJobStatus: redisJobStatusEnabled must be true/false, 1/0, or yes/no");
 }
 
-RedisJobStatus::Config defaultJobStatusConfigProvider()
+RedisJobStatus::Config RedisJobStatus::defaultConfig()
 {
-  RedisJobStatus::Config config;
+  Config config;
   config.enabled = parseEnabledFlag(get_reg_val("redisJobStatusEnabled"));
   config.serverType = get_reg_val("redisJobStatusServerType");
   config.serverId = get_reg_val("redisJobStatusServerId");
   return config;
 }
-} // namespace
 
 RedisJobStatus::RedisJobStatus(ConfigProvider provider)
 {
-  const Config config = provider ? provider() : defaultJobStatusConfigProvider();
+  const Config config = provider ? provider() : defaultConfig();
   m_enabled = config.enabled;
   m_serverType = config.serverType;
   m_serverId = config.serverId;

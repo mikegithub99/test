@@ -134,6 +134,8 @@ public:
       const std::string& serverId);
 
 private:
+  static bool parseEnabledFlag(const std::string& value);
+  static Config defaultConfig();
   static std::string stateName(State state);
   static void validateIdentifier(
       const std::string& value,

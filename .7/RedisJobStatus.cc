@@ -153,9 +153,7 @@ RedisJobStatus::Job readJob(Redis& redis, const string& key)
   }
   return job;
 }
-} // namespace
-
-bool RedisJobStatus::parseEnabledFlag(const string& value)
+bool parseEnabledFlag(const string& value)
 {
   string normalized = value;
   transform(normalized.begin(), normalized.end(), normalized.begin(),
@@ -176,14 +174,15 @@ bool RedisJobStatus::parseEnabledFlag(const string& value)
       "RedisJobStatus: redisJobStatusEnabled must be true/false, 1/0, or yes/no");
 }
 
-RedisJobStatus::Config RedisJobStatus::defaultConfig()
+RedisJobStatus::Config defaultConfig()
 {
-  Config config;
+  RedisJobStatus::Config config;
   config.enabled = parseEnabledFlag(get_reg_val("redisJobStatusEnabled"));
   config.serverType = get_reg_val("redisJobStatusServerType");
   config.serverId = get_reg_val("redisJobStatusServerId");
   return config;
 }
+} // namespace
 
 RedisJobStatus::RedisJobStatus(ConfigProvider provider)
 {

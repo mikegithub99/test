@@ -1,114 +1,88 @@
 /**
  * @file RedisStatusCli.cc
- * @brief Interactive drill-down from server types to instances and jobs.
+ * @brief Standalone Redis keyspace inspector for SET and HASH values.
+ *
+ * Configuration:
+ *   REDIS_URL=redis://127.0.0.1:6379
+ *
+ * Optional:
+ *   REDIS_PATTERN='*'       Key pattern passed to SCAN.
+ *   REDIS_SCAN_COUNT=500    SCAN count hint.
  */
 
-#include "RedisJobStatus.h"
+#include <sw/redis++/redis++.h>
 
 #include <cstdlib>
 #include <iostream>
-#include <limits>
-#include <map>
 #include <string>
-#include <vector>
 #include <utility>
+#include <vector>
 
 using std::cerr;
-using std::cin;
 using std::cout;
-using std::exception;
-using std::int64_t;
-using std::map;
-using std::numeric_limits;
-using std::runtime_error;
-using std::size_t;
-using std::streamsize;
+using std::getenv;
+using std::pair;
 using std::string;
 using std::vector;
-using std::pair;
-using sw::redis::RedisClient;
-
+using sw::redis::Redis;
 
 namespace
 {
-void initializeApplicationConfiguration()
+string environmentValue(const char* name, const string& fallback)
 {
-  // TODO: initialize the host application's configuration registry before constructing RedisJobStatus.
+  const char* value = getenv(name);
+  return value == nullptr || *value == '\\0' ? fallback : value;
 }
 
-void dumpRedisData()
+long long scanCount()
 {
-  const auto client = RedisClient::Instance();
-  client->execute(
-      [](auto& redis)
-      {
-        long long cursor = 0;
-        vector<string> keys;
-        do
-        {
-          redis.scan(cursor, "*", 500, std::back_inserter(keys));
-        }
-        while (cursor != 0);
-
-        cout << "\\n=== Redis keys (" << keys.size() << ") ===\\n";
-        for (const auto& key : keys)
-        {
-          const auto type = redis.type(key);
-          cout << "\\n[" << type << "] " << key << '\\n';
-
-          if (type == "set")
-          {
-            vector<string> values;
-            redis.smembers(key, std::back_inserter(values));
-            for (const auto& value : values)
-            {
-              cout << "  - " << value << '\\n';
-            }
-          }
-          else if (type == "hash")
-          {
-            vector<pair<string, string>> fields;
-            redis.hgetall(key, std::back_inserter(fields));
-            for (const auto& field : fields)
-            {
-              cout << "  " << field.first << " = " << field.second << '\\n';
-            }
-          }
-          else if (type == "string")
-          {
-            const auto value = redis.get(key);
-            if (value)
-            {
-              cout << "  " << *value << '\\n';
-            }
-            const auto ttl = redis.ttl(key);
-            cout << "  TTL: " << ttl << " seconds\\n";
-          }
-          else
-          {
-            cout << "  (value display not implemented for this Redis type)\\n";
-          }
-        }
-      });
-}
-
-void printCounters(const map<string, int64_t>& counters)
-{
-  for (const auto& item : counters)
+  const string value = environmentValue("REDIS_SCAN_COUNT", "500");
+  try
   {
-    cout << "    " << item.first << ": " << item.second << '\n';
+    const auto count = std::stoll(value);
+    return count > 0 ? count : 500;
+  }
+  catch (...)
+  {
+    return 500;
   }
 }
 
-size_t choose(size_t count)
+void printKey(Redis& redis, const string& key)
 {
-  cout << "Choice (0 = back/exit): ";
-  size_t value = 0;
-  if (!(cin >> value) || value > count)
+  const string type = redis.type(key);
+  cout << "\\n[" << type << "] " << key << '\\n';
+
+  if (type == "set")
   {
-    throw runtime_error("Invalid selection");
+    vector<string> members;
+    redis.smembers(key, std::back_inserter(members));
+    cout << "  members (" << members.size() << "):\\n";
+    for (const auto& member : members)
+    {
+      cout << "    " << member << '\\n';
+    }
   }
-  return value;
+  else if (type == "hash")
+  {
+    vector<pair<string, string>> fields;
+    redis.hgetall(key, std::back_inserter(fields));
+    cout << "  fields (" << fields.size() << "):\\n";
+    for (const auto& field : fields)
+    {
+      cout << "    " << field.first << " = " << field.second << '\\n';
+    }
+  }
+  else if (type == "string")
+  {
+    const auto value = redis.get(key);
+    cout << "  value: " << (value ? *value : string("<missing>")) << '\\n';
+    cout << "  TTL: " << redis.ttl(key) << " seconds\\n";
+  }
+  else
+  {
+    cout << "  (value display is currently implemented for SET, HASH, and STRING)\\n";
+  }
 }
 } // namespace
 
@@ -116,74 +90,51 @@ int main()
 {
   try
   {
-    initializeApplicationConfiguration();
-    dumpRedisData();
+    const string redisUrl = environmentValue(
+        "REDIS_URL", "redis://127.0.0.1:6379");
+    const string pattern = environmentValue("REDIS_PATTERN", "*");
+    Redis redis(redisUrl);
 
-    RedisJobStatus status([]
+    long long cursor = 0;
+    const long long count = scanCount();
+    size_t keyCount = 0;
+
+    cout << "Redis keyspace inspection\\n"
+         << "URL: " << redisUrl << '\\n'
+         << "Pattern: " << pattern << '\\n';
+
+    do
     {
-      return RedisJobStatus::Config{true, "dashboard", "status-cli"};
-    });
+      vector<string> keys;
+      redis.scan(cursor, pattern, count, std::back_inserter(keys));
 
-    bool done = false;
-    while (!done)
-    {
-      const auto types = status.getServerTypes();
-      cout << "\n=== Server types ===\n";
-      for (size_t i = 0; i < types.size(); ++i)
+      for (const auto& key : keys)
       {
-        cout << i + 1 << ") " << types[i] << '\n';
-        printCounters(status.getTypeSummary(types[i]));
-      }
-      cout << "0) Exit\n";
-      const auto typeChoice = choose(types.size());
-      if (typeChoice == 0)
-      {
-        break;
-      }
-
-      const auto& type = types[typeChoice - 1];
-      bool backToTypes = false;
-      while (!backToTypes)
-      {
-        const auto servers = status.getServerSummaries(type);
-        cout << "\n=== Instances: " << type << " ===\n";
-        for (size_t i = 0; i < servers.size(); ++i)
+        try
         {
-          cout << i + 1 << ") " << servers[i].serverId << '\n';
-          printCounters(servers[i].counters);
+          printKey(redis, key);
+          ++keyCount;
         }
-        cout << "0) Back\n";
-        const auto serverChoice = choose(servers.size());
-        if (serverChoice == 0)
+        catch (const sw::redis::Error& error)
         {
-          backToTypes = true;
-          continue;
+          cerr << "\\n[warning] Could not read key '" << key
+               << "': " << error.what() << '\\n';
         }
-
-        const auto& serverId = servers[serverChoice - 1].serverId;
-        const auto jobs = status.getServerJobs(type, serverId);
-        cout << "\n=== Jobs: " << type << " / " << serverId
-                  << " (" << jobs.size() << ") ===\n";
-        for (const auto& job : jobs)
-        {
-          cout << "jobId=" << job.jobId << " status=" << job.status
-                    << " serverId=" << job.serverId << '\n';
-          for (const auto& field : job.fields)
-          {
-            cout << "    " << field.first << ": "
-                      << field.second << '\n';
-          }
-        }
-        cout << "Press Enter to return to instances...";
-        cin.ignore(numeric_limits<streamsize>::max(), '\n');
-        cin.get();
       }
     }
+    while (cursor != 0);
+
+    cout << "\\nFinished. Read " << keyCount << " keys.\\n";
     return EXIT_SUCCESS;
   }
-  catch (const exception& ex)
+  catch (const sw::redis::Error& error)
   {
-    cerr << "RedisStatusCli: " << ex.what() << '\n';
+    cerr << "RedisStatusCli: " << error.what() << '\\n';
+    return EXIT_FAILURE;
+  }
+  catch (const std::exception& error)
+  {
+    cerr << "RedisStatusCli: " << error.what() << '\\n';
     return EXIT_FAILURE;
   }
 }

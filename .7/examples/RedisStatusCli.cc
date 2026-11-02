@@ -10,6 +10,8 @@
 #include <limits>
 #include <map>
 #include <string>
+#include <vector>
+#include <utility>
 
 using std::cerr;
 using std::cin;
@@ -22,6 +24,9 @@ using std::runtime_error;
 using std::size_t;
 using std::streamsize;
 using std::string;
+using std::vector;
+using std::pair;
+using sw::redis::RedisClient;
 
 
 namespace
@@ -29,6 +34,62 @@ namespace
 void initializeApplicationConfiguration()
 {
   // TODO: initialize the host application's configuration registry before constructing RedisJobStatus.
+}
+
+void dumpRedisData()
+{
+  const auto client = RedisClient::Instance();
+  client->execute(
+      [](auto& redis)
+      {
+        long long cursor = 0;
+        vector<string> keys;
+        do
+        {
+          redis.scan(cursor, "*", 500, std::back_inserter(keys));
+        }
+        while (cursor != 0);
+
+        cout << "\\n=== Redis keys (" << keys.size() << ") ===\\n";
+        for (const auto& key : keys)
+        {
+          const auto type = redis.type(key);
+          cout << "\\n[" << type << "] " << key << '\\n';
+
+          if (type == "set")
+          {
+            vector<string> values;
+            redis.smembers(key, std::back_inserter(values));
+            for (const auto& value : values)
+            {
+              cout << "  - " << value << '\\n';
+            }
+          }
+          else if (type == "hash")
+          {
+            vector<pair<string, string>> fields;
+            redis.hgetall(key, std::back_inserter(fields));
+            for (const auto& field : fields)
+            {
+              cout << "  " << field.first << " = " << field.second << '\\n';
+            }
+          }
+          else if (type == "string")
+          {
+            const auto value = redis.get(key);
+            if (value)
+            {
+              cout << "  " << *value << '\\n';
+            }
+            const auto ttl = redis.ttl(key);
+            cout << "  TTL: " << ttl << " seconds\\n";
+          }
+          else
+          {
+            cout << "  (value display not implemented for this Redis type)\\n";
+          }
+        }
+      });
 }
 
 void printCounters(const map<string, int64_t>& counters)
@@ -56,6 +117,8 @@ int main()
   try
   {
     initializeApplicationConfiguration();
+    dumpRedisData();
+
     RedisJobStatus status([]
     {
       return RedisJobStatus::Config{true, "dashboard", "status-cli"};

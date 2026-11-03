@@ -41,6 +41,8 @@ class RedisBrowser(App):
         ("2", "toggle_pause", "Pause / Resume"),
         ("3", "slower", "Slower"),
         ("4", "faster", "Faster"),
+        ("enter", "toggle_expand", "Expand / Collapse"),
+        ("space", "toggle_expand", "Expand / Collapse"),
         ("q", "quit", "Quit"),
     ]
 
@@ -63,7 +65,9 @@ class RedisBrowser(App):
         self.paused = False
         self._refreshing = False
         self._timer = None
-        self.last_rows: list[tuple[str, str, str, str, str, str]] = []
+        self.last_rows = []
+        self.expanded_types: set[str] = set()
+        self.expanded_servers: set[str] = set()
 
     @property
     def interval(self) -> int:
@@ -74,7 +78,7 @@ class RedisBrowser(App):
         yield DataTable(id="table", cursor_type="row", zebra_stripes=True)
         yield Static("Starting…", id="status")
         yield Static(
-            "1 Refresh   2 Pause/Resume   3 Slower   4 Faster   Q Quit",
+            "Enter/Space Expand-Collapse   1 Refresh   2 Pause   3 Slower   4 Faster   Q Quit",
             id="controls",
         )
 
@@ -99,40 +103,32 @@ class RedisBrowser(App):
         except Exception:
             pass
 
-    def load_hierarchy(self) -> list[tuple[str, str, str, str, str, str]]:
-        rows: list[tuple[str, str, str, str, str, str]] = []
+    def load_hierarchy(self):
+        """Read the complete hierarchy, including parent and depth metadata."""
+        rows = []
         server_types = sorted(self.client.smembers("servers:{registry}:types"))
 
         for server_type in server_types:
-            type_summary_key = f"summary:type:{{{server_type}}}"
-            type_counters = counter_values(self.client.hgetall(type_summary_key))
-            rows.append((
-                type_summary_key,
-                server_type,
-                *type_counters,
-            ))
-
+            type_key = f"summary:type:{{{server_type}}}"
+            type_counters = counter_values(self.client.hgetall(type_key))
             server_set_key = f"servers:{{registry}}:type:{server_type}"
             server_ids = sorted(self.client.smembers(server_set_key))
+            rows.append((
+                type_key, server_type, *type_counters, 0, None,
+                bool(server_ids),
+            ))
 
             for server_id in server_ids:
-                server_summary_key = (
-                    f"summary:server:{{{server_type}}}:{server_id}"
-                )
-                server_counters = counter_values(
-                    self.client.hgetall(server_summary_key)
-                )
+                server_key = f"summary:server:{{{server_type}}}:{server_id}"
+                server_counters = counter_values(self.client.hgetall(server_key))
+                jobs_set_key = f"jobs:server:{{{server_type}}}:{server_id}"
+                references = sorted(self.client.smembers(jobs_set_key))
                 rows.append((
-                    server_summary_key,
-                    f"  SERVER: {server_id}",
-                    *server_counters,
+                    server_key, f"SERVER: {server_id}", *server_counters,
+                    1, type_key, bool(references),
                 ))
 
-                server_jobs_key = (
-                    f"jobs:server:{{{server_type}}}:{server_id}"
-                )
-                references = sorted(self.client.smembers(server_jobs_key))
-                for index, reference in enumerate(references):
+                for reference in references:
                     job_key = f"job:{{{server_type}}}:{reference}"
                     job = self.client.hgetall(job_key)
                     if not job:
@@ -140,22 +136,37 @@ class RedisBrowser(App):
                     job_id = job.get("jobId", reference)
                     status = job.get("status", "UNKNOWN").upper()
                     rows.append((
-                        job_key,
-                        f"    JOB: {job_id} [{status}]",
+                        job_key, f"JOB: {job_id} [{status}]",
                         "1" if status == "PENDING" else "0",
                         "1" if status == "ACTIVE" else "0",
                         "1" if status == "SUSPENDED" else "0",
-                        "1",
+                        "1", 2, server_key, False,
                     ))
-
         return rows
+
+    def visible_hierarchy(self, all_rows):
+        """Return only rows whose parent levels are expanded."""
+        by_key = {row[0]: row for row in all_rows}
+        visible = []
+        for row in all_rows:
+            key, label, pending, active, suspended, total, level, parent, has_children = row
+            if level == 0:
+                visible.append(row)
+            elif level == 1 and parent in self.expanded_types:
+                visible.append(row)
+            elif level == 2 and parent in self.expanded_servers:
+                parent_server = by_key.get(parent)
+                if parent_server and parent_server[7] in self.expanded_types:
+                    visible.append(row)
+        return visible
 
     async def refresh_view(self) -> None:
         if self._refreshing:
             return
         self._refreshing = True
         try:
-            rows = await asyncio.to_thread(self.load_hierarchy)
+            all_rows = await asyncio.to_thread(self.load_hierarchy)
+            rows = self.visible_hierarchy(all_rows)
             table = self.query_one("#table", DataTable)
             old_cursor_row = table.cursor_row
             old_cursor_key = None
@@ -166,45 +177,68 @@ class RedisBrowser(App):
             self.last_rows = rows
             table.clear()
             for row in rows:
-                # Normalize defensively so a malformed/older row shape cannot
-                # abort the entire refresh cycle.
-                values = tuple(row[:6])
-                if len(values) < 6:
-                    values += ("0",) * (6 - len(values))
-                key, label, pending, active, suspended, total = values
-                display = (
-                    f"{label:<44} {pending:>7} {active:>7} "
-                    f"{suspended:>10} {total:>6}"
+                key, label, pending, active, suspended, total = row[:6]
+                level, parent, has_children = row[6:9]
+                is_expanded = (
+                    (level == 0 and key in self.expanded_types)
+                    or (level == 1 and key in self.expanded_servers)
                 )
-                # Disable Rich markup parsing so bracketed IDs/status text stay literal.
+                marker = "[-]" if has_children and is_expanded else (
+                    "[+]" if has_children else "   "
+                )
+                display = (
+                    f"{'    ' * level}{marker} {label:<38} "
+                    f"{pending:>7} {active:>7} {suspended:>10} {total:>6}"
+                )
                 table.add_row(Text(display), key=key)
 
             restored_index = None
             if old_cursor_key:
                 restored_index = next(
-                    (
-                        index for index, row in enumerate(rows)
-                        if row[0] == old_cursor_key
-                    ),
+                    (i for i, row in enumerate(rows) if row[0] == old_cursor_key),
                     None,
                 )
             if restored_index is None and rows:
                 restored_index = min(max(old_cursor_row, 0), len(rows) - 1)
             if restored_index is not None:
                 table.move_cursor(row=restored_index, column=0, animate=False)
-
             if had_focus:
                 table.focus()
 
             state = "PAUSED" if self.paused else f"refresh every {self.interval}s"
             self.query_one("#status", Static).update(
-                f"{len(rows)} rows | {state} | Updated "
+                f"{len(rows)} visible rows | {state} | Updated "
                 f"{datetime.now().astimezone().strftime('%H:%M:%S %Z')}"
             )
         except Exception as exc:
             self.query_one("#status", Static).update(f"Redis error: {exc}")
         finally:
             self._refreshing = False
+
+    async def action_toggle_expand(self) -> None:
+        table = self.query_one("#table", DataTable)
+        row_index = table.cursor_row
+        if not 0 <= row_index < len(self.last_rows):
+            return
+        row = self.last_rows[row_index]
+        key, _label, _p, _a, _s, _t, level, _parent, has_children = row
+        if not has_children:
+            return
+        if level == 0:
+            if key in self.expanded_types:
+                self.expanded_types.remove(key)
+                # Clear child expansion state when collapsing a server type.
+                for child in self.last_rows:
+                    if child[6] == 1 and child[7] == key:
+                        self.expanded_servers.discard(child[0])
+            else:
+                self.expanded_types.add(key)
+        elif level == 1:
+            if key in self.expanded_servers:
+                self.expanded_servers.remove(key)
+            else:
+                self.expanded_servers.add(key)
+        await self.refresh_view()
 
     def restart_timer(self) -> None:
         if self._timer:

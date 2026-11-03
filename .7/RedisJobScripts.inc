@@ -12,8 +12,9 @@
  * - `for`, `#`, and `table.insert` to collect optional field/value pairs.
  * - Tables and `unpack` to pass a variable-length HSET argument list.
  * - `string.lower` and `tonumber` to normalize and validate counters.
- * - `KEYS[n]` and `ARGV[n]` to access explicit keys and arguments supplied
- *   by the C++ caller; Lua tables are one-indexed.
+ * - `KEYS[n]` and `ARGV[n]` at the start of each script to assign descriptive
+ *   local names to the explicit keys and arguments supplied by the C++ caller;
+ *   Lua tables are one-indexed.
  * - `redis.call` to execute Redis commands and `return` to report results.
  *
  * Redis executes each script atomically with respect to other commands, but
@@ -24,8 +25,8 @@
 /**
  * @brief Creates a PENDING job and updates its indexes and summary counters.
  *
- * KEYS[1] job hash; KEYS[2] type job-ID set; KEYS[3] server job-ID set;
- * KEYS[4] type summary hash; KEYS[5] server summary hash.
+ * jobKey job hash; typeJobsKey type job-ID set; serverJobsKey server job-ID set;
+ * typeSummaryKey type summary hash; serverSummaryKey server summary hash.
  * ARGV[1..4] are jobId, serverType, serverId, and composite reference. Remaining ARGV values are
  * optional metadata field/value pairs.
  *
@@ -33,6 +34,12 @@
  * has an unexpected type.
  */
 const char* const kCreatePendingScript = R"lua(
+local jobKey = jobKey
+local typeJobsKey = typeJobsKey
+local serverJobsKey = serverJobsKey
+local typeSummaryKey = typeSummaryKey
+local serverSummaryKey = serverSummaryKey
+
 local function keytype(key)
   return redis.call('TYPE', key).ok
 end
@@ -41,13 +48,13 @@ local function validtype(key, expected)
   return t == 'none' or t == expected
 end
 
-if redis.call('EXISTS', KEYS[1]) == 1 then
+if redis.call('EXISTS', jobKey) == 1 then
   return 5
 end
-if not validtype(KEYS[2], 'set') or
-   not validtype(KEYS[3], 'set') or
-   not validtype(KEYS[4], 'hash') or
-   not validtype(KEYS[5], 'hash') then
+if not validtype(typeJobsKey, 'set') or
+   not validtype(serverJobsKey, 'set') or
+   not validtype(typeSummaryKey, 'hash') or
+   not validtype(serverSummaryKey, 'hash') then
   return 4
 end
 
@@ -63,21 +70,21 @@ for i = metadataStart, #ARGV, 2 do
   table.insert(fields, ARGV[i + 1])
 end
 
-redis.call('HSET', KEYS[1], unpack(fields))
-redis.call('SADD', KEYS[2], reference)
-redis.call('SADD', KEYS[3], reference)
-redis.call('HINCRBY', KEYS[4], 'pending', 1)
-redis.call('HINCRBY', KEYS[4], 'total', 1)
-redis.call('HINCRBY', KEYS[5], 'pending', 1)
-redis.call('HINCRBY', KEYS[5], 'total', 1)
+redis.call('HSET', jobKey, unpack(fields))
+redis.call('SADD', typeJobsKey, reference)
+redis.call('SADD', serverJobsKey, reference)
+redis.call('HINCRBY', typeSummaryKey, 'pending', 1)
+redis.call('HINCRBY', typeSummaryKey, 'total', 1)
+redis.call('HINCRBY', serverSummaryKey, 'pending', 1)
+redis.call('HINCRBY', serverSummaryKey, 'total', 1)
 return 0
 )lua";
 
 /**
  * @brief Moves a job between supported lifecycle states and updates counters.
  *
- * KEYS[1] job hash; KEYS[2] type job-ID set; KEYS[3] server job-ID set;
- * KEYS[4] type summary hash; KEYS[5] server summary hash.
+ * jobKey job hash; typeJobsKey type job-ID set; serverJobsKey server job-ID set;
+ * typeSummaryKey type summary hash; serverSummaryKey server summary hash.
  * ARGV[1..5] are jobId, serverType, serverId, target state, and composite reference.
  *
  * Returns 0 on success, 1 if the state is unchanged, 2 if the job is missing,
@@ -85,6 +92,12 @@ return 0
  * or counters are inconsistent.
  */
 const char* const kTransitionScript = R"lua(
+local jobKey = jobKey
+local typeJobsKey = typeJobsKey
+local serverJobsKey = serverJobsKey
+local typeSummaryKey = typeSummaryKey
+local serverSummaryKey = serverSummaryKey
+
 local function keytype(key)
   return redis.call('TYPE', key).ok
 end
@@ -93,19 +106,19 @@ local function validtype(key, expected)
   return t == 'none' or t == expected
 end
 
-if redis.call('EXISTS', KEYS[1]) == 0 then
+if redis.call('EXISTS', jobKey) == 0 then
   return 2
 end
-if not validtype(KEYS[2], 'set') or
-   not validtype(KEYS[3], 'set') or
-   not validtype(KEYS[4], 'hash') or
-   not validtype(KEYS[5], 'hash') then
+if not validtype(typeJobsKey, 'set') or
+   not validtype(serverJobsKey, 'set') or
+   not validtype(typeSummaryKey, 'hash') or
+   not validtype(serverSummaryKey, 'hash') then
   return 4
 end
 
-local old = redis.call('HGET', KEYS[1], 'status')
-local storedType = redis.call('HGET', KEYS[1], 'serverType')
-local storedServer = redis.call('HGET', KEYS[1], 'serverId')
+local old = redis.call('HGET', jobKey, 'status')
+local storedType = redis.call('HGET', jobKey, 'serverType')
+local storedServer = redis.call('HGET', jobKey, 'serverId')
 local jobId = ARGV[1]
 local serverType = ARGV[2]
 local serverId = ARGV[3]
@@ -114,8 +127,8 @@ local reference = ARGV[5]
 if storedType ~= serverType or storedServer ~= serverId or not old then
   return 4
 end
-if not redis.call('SISMEMBER', KEYS[2], reference) or
-   not redis.call('SISMEMBER', KEYS[3], reference) then
+if not redis.call('SISMEMBER', typeJobsKey, reference) or
+   not redis.call('SISMEMBER', serverJobsKey, reference) then
   return 4
 end
 if old == newState then
@@ -137,29 +150,35 @@ local function hasCounters(key)
   local total = tonumber(redis.call('HGET', key, 'total') or '0')
   return oldValue and total and oldValue >= 1 and total >= 1
 end
-if not hasCounters(KEYS[4]) or not hasCounters(KEYS[5]) then
+if not hasCounters(typeSummaryKey) or not hasCounters(serverSummaryKey) then
   return 4
 end
 
-redis.call('HSET', KEYS[1], 'status', newState)
-redis.call('HINCRBY', KEYS[4], oldCounter, -1)
-redis.call('HINCRBY', KEYS[4], newCounter, 1)
-redis.call('HINCRBY', KEYS[5], oldCounter, -1)
-redis.call('HINCRBY', KEYS[5], newCounter, 1)
+redis.call('HSET', jobKey, 'status', newState)
+redis.call('HINCRBY', typeSummaryKey, oldCounter, -1)
+redis.call('HINCRBY', typeSummaryKey, newCounter, 1)
+redis.call('HINCRBY', serverSummaryKey, oldCounter, -1)
+redis.call('HINCRBY', serverSummaryKey, newCounter, 1)
 return 0
 )lua";
 
 /**
  * @brief Removes a job and decrements its state and total counters.
  *
- * KEYS[1] job hash; KEYS[2] type job-ID set; KEYS[3] server job-ID set;
- * KEYS[4] type summary hash; KEYS[5] server summary hash.
+ * jobKey job hash; typeJobsKey type job-ID set; serverJobsKey server job-ID set;
+ * typeSummaryKey type summary hash; serverSummaryKey server summary hash.
  * ARGV[1..4] are jobId, serverType, serverId, and composite reference.
  *
  * Returns 0 on success, 2 if the job is missing, and 4 if stored ownership,
  * indexes, key types, state, or counters are inconsistent.
  */
 const char* const kCompleteScript = R"lua(
+local jobKey = jobKey
+local typeJobsKey = typeJobsKey
+local serverJobsKey = serverJobsKey
+local typeSummaryKey = typeSummaryKey
+local serverSummaryKey = serverSummaryKey
+
 local function keytype(key)
   return redis.call('TYPE', key).ok
 end
@@ -168,19 +187,19 @@ local function validtype(key, expected)
   return t == 'none' or t == expected
 end
 
-if redis.call('EXISTS', KEYS[1]) == 0 then
+if redis.call('EXISTS', jobKey) == 0 then
   return 2
 end
-if not validtype(KEYS[2], 'set') or
-   not validtype(KEYS[3], 'set') or
-   not validtype(KEYS[4], 'hash') or
-   not validtype(KEYS[5], 'hash') then
+if not validtype(typeJobsKey, 'set') or
+   not validtype(serverJobsKey, 'set') or
+   not validtype(typeSummaryKey, 'hash') or
+   not validtype(serverSummaryKey, 'hash') then
   return 4
 end
 
-local status = redis.call('HGET', KEYS[1], 'status')
-local storedType = redis.call('HGET', KEYS[1], 'serverType')
-local storedServer = redis.call('HGET', KEYS[1], 'serverId')
+local status = redis.call('HGET', jobKey, 'status')
+local storedType = redis.call('HGET', jobKey, 'serverType')
+local storedServer = redis.call('HGET', jobKey, 'serverId')
 local jobId = ARGV[1]
 local serverType = ARGV[2]
 local serverId = ARGV[3]
@@ -188,8 +207,8 @@ local reference = ARGV[4]
 if storedType ~= serverType or storedServer ~= serverId or not status then
   return 4
 end
-if not redis.call('SISMEMBER', KEYS[2], reference) or
-   not redis.call('SISMEMBER', KEYS[3], reference) then
+if not redis.call('SISMEMBER', typeJobsKey, reference) or
+   not redis.call('SISMEMBER', serverJobsKey, reference) then
   return 4
 end
 
@@ -202,31 +221,34 @@ local function hasCounters(key)
   local total = tonumber(redis.call('HGET', key, 'total') or '0')
   return count and total and count >= 1 and total >= 1
 end
-if not hasCounters(KEYS[4]) or not hasCounters(KEYS[5]) then
+if not hasCounters(typeSummaryKey) or not hasCounters(serverSummaryKey) then
   return 4
 end
 
-redis.call('HINCRBY', KEYS[4], counter, -1)
-redis.call('HINCRBY', KEYS[4], 'total', -1)
-redis.call('HINCRBY', KEYS[5], counter, -1)
-redis.call('HINCRBY', KEYS[5], 'total', -1)
-redis.call('SREM', KEYS[2], reference)
-redis.call('SREM', KEYS[3], reference)
-redis.call('DEL', KEYS[1])
+redis.call('HINCRBY', typeSummaryKey, counter, -1)
+redis.call('HINCRBY', typeSummaryKey, 'total', -1)
+redis.call('HINCRBY', serverSummaryKey, counter, -1)
+redis.call('HINCRBY', serverSummaryKey, 'total', -1)
+redis.call('SREM', typeJobsKey, reference)
+redis.call('SREM', serverJobsKey, reference)
+redis.call('DEL', jobKey)
 return 0
 )lua";
 
 /**
  * @brief Adds a server type to global discovery and an instance to that type.
  *
- * KEYS[1] is the global server-type set and KEYS[2] is the type-specific
+ * jobKey is the global server-type set and typeJobsKey is the type-specific
  * server-ID set. Both keys must use the {registry} Redis Cluster hash tag.
  * ARGV[1] is serverType and ARGV[2] is serverId.
  *
- * Returns the SADD result for KEYS[2]. Returns a Redis error reply before
+ * Returns the SADD result for typeJobsKey. Returns a Redis error reply before
  * writing if either key exists with a type other than SET.
  */
 const char* const kRegisterServerScript = R"lua(
+local serverTypesKey = serverTypesKey
+local typeServersKey = typeServersKey
+
 local function validtype(key)
   local t = redis.call('TYPE', key).ok
   return t == 'none' or t == 'set'
@@ -234,12 +256,12 @@ end
 
 -- Validate both keys before either write so a wrong-type key cannot leave
 -- the two registries out of sync.
-if not validtype(KEYS[1]) or not validtype(KEYS[2]) then
+if not validtype(serverTypesKey) or not validtype(typeServersKey) then
   return redis.error_reply('wrong key type')
 end
 
 local serverType = ARGV[1]
 local serverId = ARGV[2]
-redis.call('SADD', KEYS[1], serverType)
-return redis.call('SADD', KEYS[2], serverId)
+redis.call('SADD', serverTypesKey, serverType)
+return redis.call('SADD', typeServersKey, serverId)
 )lua";

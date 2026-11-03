@@ -111,11 +111,11 @@ class RedisBrowser(App):
         table = self.query_one("#table", DataTable)
         table.clear(columns=True)
         if self.mode == "overview":
-            table.add_columns("Server Type", "Server ID", "Status / Heartbeat", "Details")
+            table.add_columns("Server Type", "Server ID", "Status / Heartbeat")
         elif self.mode == "jobs":
-            table.add_columns("Job ID", "Server Type / Server ID", "Status", "Details")
+            table.add_columns("Job ID", "Server Type / Server ID", "Status")
         else:
-            table.add_columns("Redis Key", "Type", "Details", "Info")
+            table.add_columns("Redis Key", "Type", "Details")
 
     def set_mode(self, mode: str) -> None:
         self.mode = mode
@@ -186,7 +186,7 @@ class RedisBrowser(App):
             self.last_rows = rows
             table.clear()
             for key, name, col2, col3 in rows:
-                table.add_row(name, col2, col3, key, key=key)
+                table.add_row(name, col2, col3, key=key)
 
             restored_index = None
             if old_key:

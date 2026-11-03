@@ -55,9 +55,10 @@ local jobId = ARGV[1]
 local serverType = ARGV[2]
 local serverId = ARGV[3]
 local reference = ARGV[4]
+local metadataStart = 5
 local fields = {'jobId', jobId, 'status', 'PENDING',
                 'serverType', serverType, 'serverId', serverId}
-for i = 5, #ARGV, 2 do
+for i = metadataStart, #ARGV, 2 do
   table.insert(fields, ARGV[i])
   table.insert(fields, ARGV[i + 1])
 end
@@ -105,9 +106,12 @@ end
 local old = redis.call('HGET', KEYS[1], 'status')
 local storedType = redis.call('HGET', KEYS[1], 'serverType')
 local storedServer = redis.call('HGET', KEYS[1], 'serverId')
+local jobId = ARGV[1]
+local serverType = ARGV[2]
+local serverId = ARGV[3]
 local newState = ARGV[4]
 local reference = ARGV[5]
-if storedType ~= ARGV[2] or storedServer ~= ARGV[3] or not old then
+if storedType ~= serverType or storedServer ~= serverId or not old then
   return 4
 end
 if not redis.call('SISMEMBER', KEYS[2], reference) or
@@ -177,8 +181,11 @@ end
 local status = redis.call('HGET', KEYS[1], 'status')
 local storedType = redis.call('HGET', KEYS[1], 'serverType')
 local storedServer = redis.call('HGET', KEYS[1], 'serverId')
+local jobId = ARGV[1]
+local serverType = ARGV[2]
+local serverId = ARGV[3]
 local reference = ARGV[4]
-if storedType ~= ARGV[2] or storedServer ~= ARGV[3] or not status then
+if storedType ~= serverType or storedServer ~= serverId or not status then
   return 4
 end
 if not redis.call('SISMEMBER', KEYS[2], reference) or
@@ -231,6 +238,8 @@ if not validtype(KEYS[1]) or not validtype(KEYS[2]) then
   return redis.error_reply('wrong key type')
 end
 
-redis.call('SADD', KEYS[1], ARGV[1])
-return redis.call('SADD', KEYS[2], ARGV[2])
+local serverType = ARGV[1]
+local serverId = ARGV[2]
+redis.call('SADD', KEYS[1], serverType)
+return redis.call('SADD', KEYS[2], serverId)
 )lua";

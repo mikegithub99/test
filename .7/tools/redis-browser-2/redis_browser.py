@@ -41,7 +41,6 @@ class RedisBrowser(App):
         ("2", "toggle_pause", "Pause / Resume"),
         ("3", "slower", "Slower"),
         ("4", "faster", "Faster"),
-        ("enter", "toggle_expand", "Expand / Collapse"),
         ("space", "toggle_expand", "Expand / Collapse"),
         ("q", "quit", "Quit"),
     ]
@@ -186,8 +185,12 @@ class RedisBrowser(App):
                 marker = "[-]" if has_children and is_expanded else (
                     "[+]" if has_children else "   "
                 )
+                # Indentation belongs inside a fixed-width label field;
+                # counters therefore start at the same screen column at
+                # every hierarchy depth.
+                item_label = f"{'  ' * level}{marker} {label}"
                 display = (
-                    f"{'    ' * level}{marker} {label:<38} "
+                    f"{item_label:<52.52}"
                     f"{pending:>7} {active:>7} {suspended:>10} {total:>6}"
                 )
                 table.add_row(Text(display), key=key)

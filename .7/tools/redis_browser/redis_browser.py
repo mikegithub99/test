@@ -162,6 +162,8 @@ class RedisBrowser(App):
             self.set_mode(event.button.id)
             await self.refresh_view()
             self.query_one("#table", DataTable).focus()
+        elif event.button.id == "back":
+            self.overview_back()
         elif event.button.id == "refresh":
             await self.refresh_view()
 
@@ -185,18 +187,40 @@ class RedisBrowser(App):
     async def row_selected(self, event: DataTable.RowSelected) -> None:
         key = str(event.row_key.value)
         self.selected_key = key or None
-        if self.selected_key:
-            await self.show_details(self.selected_key)
-
+        if not self.selected_key:
+            return
+        if self.mode == "overview" and self.overview_level == "types":
+            row = next((item for item in self.last_rows if item[0] == key), None)
+            if row:
+                self.selected_server_type = row[1]
+                self.overview_level = "servers"
+                self.selected_server_id = None
+                self.set_table_columns()
+                await self.refresh_view()
+                self.query_one("#table", DataTable).focus()
+            return
+        if self.mode == "overview" and self.overview_level == "servers":
+            row = next((item for item in self.last_rows if item[0] == key), None)
+            if row:
+                self.selected_server_id = row[1]
+                self.overview_level = "jobs"
+                self.set_table_columns()
+                await self.refresh_view()
+                self.query_one("#table", DataTable).focus()
+            return
+        await self.show_details(self.selected_key)
     async def refresh_view(self) -> None:
         if self._refreshing:
             return
         self._refreshing = True
         try:
             if self.mode == "overview":
-                rows = await asyncio.to_thread(self.load_overview)
-                if self.collapsed:
-                    rows = [row for row in rows if row[1].startswith("[TYPE]")]
+                if self.overview_level == "types":
+                    rows = await asyncio.to_thread(self.load_server_types)
+                elif self.overview_level == "servers":
+                    rows = await asyncio.to_thread(self.load_servers, self.selected_server_type)
+                else:
+                    rows = await asyncio.to_thread(self.load_jobs, self.selected_server_type, self.selected_server_id)
             elif self.mode == "jobs":
                 rows = await asyncio.to_thread(self.load_jobs)
             else:

@@ -56,8 +56,6 @@ class RedisBrowser(App):
         ("e", "expand_all", "Expand all"),
         ("c", "collapse_all", "Collapse all"),
         ("q", "quit", "Quit"),
-        ("up", "move_job_row_up", "", False, None, True),
-        ("down", "move_job_row_down", "", False, None, True),
     ]
 
     CSS = """
@@ -313,40 +311,23 @@ class RedisBrowser(App):
     def update_status(self, message: str) -> None:
         self.query_one("#status", Static).update(message)
 
-    async def action_move_job_row_up(self) -> None:
-        if self.mode == "jobs":
-            table = self.query_one("#table", DataTable)
-            table.focus()
-            table.move_cursor(
-                row=max(0, table.cursor_row - 1),
-                column=table.cursor_column,
-                animate=False,
-            )
-
-    async def action_move_job_row_down(self) -> None:
-        if self.mode == "jobs":
-            table = self.query_one("#table", DataTable)
-            table.focus()
-            table.move_cursor(
-                row=min(table.row_count - 1, table.cursor_row + 1),
-                column=table.cursor_column,
-                animate=False,
-            )
-
     async def action_refresh_now(self) -> None:
         await self.refresh_view()
 
     async def action_show_overview(self) -> None:
         self.set_mode("overview")
         await self.refresh_view()
+        self.query_one("#table", DataTable).focus()
 
     async def action_show_jobs(self) -> None:
         self.set_mode("jobs")
         await self.refresh_view()
+        self.query_one("#table", DataTable).focus()
 
     async def action_show_keys(self) -> None:
         self.set_mode("keys")
         await self.refresh_view()
+        self.query_one("#table", DataTable).focus()
 
     async def action_expand_all(self) -> None:
         self.collapsed = False

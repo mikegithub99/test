@@ -165,7 +165,13 @@ class RedisBrowser(App):
 
             self.last_rows = rows
             table.clear()
-            for key, label, pending, active, suspended, total in rows:
+            for row in rows:
+                # Normalize defensively so a malformed/older row shape cannot
+                # abort the entire refresh cycle.
+                values = tuple(row[:6])
+                if len(values) < 6:
+                    values += ("0",) * (6 - len(values))
+                key, label, pending, active, suspended, total = values
                 table.add_row(
                     label, pending, active, suspended, total, key=key
                 )

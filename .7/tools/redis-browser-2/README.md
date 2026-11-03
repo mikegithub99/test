@@ -4,11 +4,7 @@ A counter-first, read-only Textual terminal UI for the RedisJobStatus .7 keyspac
 
 ## Display
 
-The screen is one continuously expanded hierarchy:
-
-- One row per **server type**, showing its aggregate counters.
-- Indented **server** rows below each type, showing per-server counters.
-- Further-indented **job** rows below each server, showing the original job ID and current status.
+The screen starts collapsed, showing one row per **server type** with its aggregate counters. Expand a server type to see its **server** rows; expand a server to see its **job** rows. Each level shows its own counters. This keeps the initial screen compact and lets you drill into only the server or job detail you need.
 
 The counter columns are always in this order:
 
@@ -27,10 +23,11 @@ Each job row contributes 1 to its current status column and 1 to Total Jobs, so 
 | 2 | Pause / resume automatic refresh |
 | 3 | Slow automatic refresh |
 | 4 | Speed up automatic refresh |
-| Up / Down | Move through the hierarchy |
+| Up / Down | Move through the visible hierarchy |
+| Enter / Space | Expand or collapse the selected server type or server |
 | q | Quit |
 
-Automatic refresh starts at 2 seconds. The interval can be adjusted through 1, 2, 5, 10, 15, and 30 seconds. Manual refresh works while paused. Refresh retains the selected row when that Redis key still exists.
+Automatic refresh starts at 2 seconds. The interval can be adjusted through 1, 2, 5, 10, 15, and 30 seconds. Manual refresh works while paused. Refresh retains the selected row when that Redis key still exists. Expanded/collapsed state is retained across refreshes.
 
 ## Install and run
 

@@ -79,13 +79,13 @@ class RedisBrowser(App):
 
     async def on_mount(self) -> None:
         table = self.query_one("#table", DataTable)
-        table.add_columns(
-            "Server Type / Server / Job",
-            "Jobs Pending",
-            "Jobs Active",
-            "Jobs Suspended",
-            "Total Jobs",
-        )
+        # Explicit widths keep the hierarchy labels visible instead of
+        # allowing the counter columns to consume the available table space.
+        table.add_column("Server Type / Server / Job", width=56, key="item")
+        table.add_column("Jobs Pending", width=13, key="pending")
+        table.add_column("Jobs Active", width=13, key="active")
+        table.add_column("Jobs Suspended", width=16, key="suspended")
+        table.add_column("Total Jobs", width=11, key="total")
         self._timer = self.set_interval(self.interval, self.refresh_view)
         table.focus()
         await self.refresh_view()
@@ -123,7 +123,7 @@ class RedisBrowser(App):
                 )
                 rows.append((
                     server_summary_key,
-                    f"  ├─ {server_id}",
+                    f"\u00a0\u00a0├─ {server_id}",
                     *server_counters,
                 ))
 
@@ -141,7 +141,7 @@ class RedisBrowser(App):
                     branch = "└─" if index == len(references) - 1 else "├─"
                     rows.append((
                         job_key,
-                        f"      {branch} {job_id} [{status}]",
+                        f"\u00a0\u00a0\u00a0\u00a0{branch} {job_id} [{status}]",
                         "1" if status == "PENDING" else "0",
                         "1" if status == "ACTIVE" else "0",
                         "1" if status == "SUSPENDED" else "0",

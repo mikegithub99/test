@@ -270,40 +270,37 @@ class RedisBrowser(App):
         finally:
             self._refreshing = False
 
-    def load_overview(self) -> list[tuple[str, str, str, str]]:
+    def load_server_types(self) -> list[tuple[str, str, str, str]]:
         rows = []
-        types = sorted(self.client.smembers("servers:{registry}:types"))
-        for server_type in types:
+        for server_type in sorted(self.client.smembers("servers:{registry}:types")):
             summary_key = f"summary:type:{{{server_type}}}"
             summary = self.client.hgetall(summary_key)
-            counts = " ".join(f"{k}={v}" for k, v in sorted(summary.items()))
-            rows.append((
-                summary_key, server_type, "", counts or "No summary",
-            ))
-            server_key = f"servers:{{registry}}:type:{server_type}"
-            for server_id in sorted(self.client.smembers(server_key)):
-                heartbeat_key = f"heartbeat:server:{{{server_type}}}:{server_id}"
-                ttl = self.client.ttl(heartbeat_key)
-                server_summary_key = f"summary:server:{{{server_type}}}:{server_id}"
-                server_summary = self.client.hgetall(server_summary_key)
-                server_counts = " ".join(
-                    f"{k}={v}" for k, v in sorted(server_summary.items())
-                )
-                heartbeat = f"heartbeat TTL={ttl}s" if ttl >= 0 else "heartbeat missing"
-                rows.append((
-                    server_summary_key, server_type, server_id,
-                    f"{heartbeat}; {server_counts}",
-                ))
+            counters = " ".join(f"{k}={v}" for k, v in sorted(summary.items()))
+            rows.append((summary_key, server_type, counters or "No counters", ""))
         return rows
 
-    def load_jobs(self) -> list[tuple[str, str, str, str]]:
+    def load_servers(self, server_type: str | None) -> list[tuple[str, str, str, str]]:
+        if not server_type:
+            return []
+        rows = []
+        server_key = f"servers:{{registry}}:type:{server_type}"
+        for server_id in sorted(self.client.smembers(server_key)):
+            heartbeat_key = f"heartbeat:server:{{{server_type}}}:{server_id}"
+            ttl = self.client.ttl(heartbeat_key)
+            heartbeat = f"TTL={ttl}s" if ttl >= 0 else "Missing"
+            summary_key = f"summary:server:{{{server_type}}}:{server_id}"
+            summary = self.client.hgetall(summary_key)
+            counters = " ".join(f"{k}={v}" for k, v in sorted(summary.items()))
+            rows.append((summary_key, server_id, heartbeat, counters or "No counters"))
+        return rows
+    def load_jobs(self, filter_server_type: str | None = None, filter_server_id: str | None = None) -> list[tuple[str, str, str, str]]:
         jobs = []
-        types = sorted(self.client.smembers("servers:{registry}:types"))
+        types = [filter_server_type] if filter_server_type else sorted(self.client.smembers("servers:{registry}:types"))
         for server_type in types:
             for reference in self.client.smembers(f"jobs:type:{{{server_type}}}"):
                 job_key = f"job:{{{server_type}}}:{reference}"
                 record = self.client.hgetall(job_key)
-                if record:
+                if record and (filter_server_id is None or record.get("serverId") == filter_server_id):
                     jobs.append((job_key, server_type, reference, record))
         duplicate_counts = Counter(record.get("jobId", "") for _, _, _, record in jobs)
         rows = []
@@ -317,8 +314,8 @@ class RedisBrowser(App):
             display_id = reference if duplicate_counts[job_id] > 1 else job_id
             rows.append((
                 job_key, display_id,
-                f"{server_type}/{record.get('serverId', '?')}",
                 record.get("status", "UNKNOWN"),
+                f"{server_type}/{record.get('serverId', '?')}",
             ))
         return rows
 

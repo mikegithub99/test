@@ -33,6 +33,7 @@
 class RedisJobStatus final
 {
 public:
+  // Numeric values are part of the Lua-script/C++ result contract; keep stable.
   enum class Result : std::int64_t
   {
     Success = 0,

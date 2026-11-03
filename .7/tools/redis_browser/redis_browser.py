@@ -56,6 +56,8 @@ class RedisBrowser(App):
         ("e", "expand_all", "Expand all"),
         ("c", "collapse_all", "Collapse all"),
         ("q", "quit", "Quit"),
+        {"key": "up", "action": "move_job_row_up", "show": False, "priority": True},
+        {"key": "down", "action": "move_job_row_down", "show": False, "priority": True},
     ]
 
     CSS = """
@@ -134,6 +136,7 @@ class RedisBrowser(App):
         if event.button.id in {"overview", "jobs", "keys"}:
             self.set_mode(event.button.id)
             await self.refresh_view()
+            self.query_one("#table", DataTable).focus()
         elif event.button.id == "refresh":
             await self.refresh_view()
 
@@ -145,6 +148,13 @@ class RedisBrowser(App):
                 self._timer.stop()
             self._timer = self.set_interval(self.interval, self.refresh_view)
             self.update_status(f"Auto-refresh every {self.interval}s")
+
+    @on(DataTable.RowHighlighted)
+    async def row_highlighted(self, event: DataTable.RowHighlighted) -> None:
+        key = str(event.row_key.value)
+        self.selected_key = key or None
+        if self.selected_key:
+            await self.show_details(self.selected_key)
 
     @on(DataTable.RowSelected)
     async def row_selected(self, event: DataTable.RowSelected) -> None:
@@ -302,6 +312,26 @@ class RedisBrowser(App):
 
     def update_status(self, message: str) -> None:
         self.query_one("#status", Static).update(message)
+
+    async def action_move_job_row_up(self) -> None:
+        if self.mode == "jobs":
+            table = self.query_one("#table", DataTable)
+            table.focus()
+            table.move_cursor(
+                row=max(0, table.cursor_row - 1),
+                column=table.cursor_column,
+                animate=False,
+            )
+
+    async def action_move_job_row_down(self) -> None:
+        if self.mode == "jobs":
+            table = self.query_one("#table", DataTable)
+            table.focus()
+            table.move_cursor(
+                row=min(table.row_count - 1, table.cursor_row + 1),
+                column=table.cursor_column,
+                animate=False,
+            )
 
     async def action_refresh_now(self) -> None:
         await self.refresh_view()

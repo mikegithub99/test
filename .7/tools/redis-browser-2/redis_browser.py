@@ -41,6 +41,7 @@ class RedisBrowser(App):
         ("2", "toggle_pause", "Pause / Resume"),
         ("3", "slower", "Slower"),
         ("4", "faster", "Faster"),
+        ("enter", "toggle_expand", "Expand / Collapse"),
         ("space", "toggle_expand", "Expand / Collapse"),
         ("q", "quit", "Quit"),
     ]

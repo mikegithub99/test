@@ -10,8 +10,8 @@ from typing import Any
 import redis
 from redis.cluster import RedisCluster
 from textual.app import App, ComposeResult
-from textual.containers import Horizontal
-from textual.widgets import DataTable, Header, Static
+from textual.screen import ModalScreen
+from textual.widgets import DataTable, Footer, Header, Static
 from rich.text import Text
 
 REFRESH_OPTIONS = (1, 2, 5, 10, 15, 30)
@@ -32,6 +32,25 @@ def counter_values(summary: dict[str, str]) -> tuple[str, str, str, str]:
     )
 
 
+class JobDetailsScreen(ModalScreen[None]):
+    """Modal view of every field stored in a selected job hash."""
+
+    BINDINGS = [("escape", "dismiss", "Close")]
+
+    def __init__(self, job_key: str, metadata: dict[str, str]) -> None:
+        super().__init__()
+        self.job_key = job_key
+        self.metadata = metadata
+
+    def compose(self) -> ComposeResult:
+        details = "JOB METADATA\\nKey: " + self.job_key + "\\n\\n"
+        details += "\\n".join(
+            f"{name}: {value}" for name, value in sorted(self.metadata.items())
+        )
+        yield Static(details, id="job-details")
+        yield Footer()
+
+
 class RedisBrowser(App):
     TITLE = "Redis Job Counters (.7)"
     SUB_TITLE = "Live hierarchy | read-only"
@@ -41,7 +60,6 @@ class RedisBrowser(App):
         ("2", "toggle_pause", "Pause / Resume"),
         ("3", "slower", "Slower"),
         ("4", "faster", "Faster"),
-        ("enter", "toggle_expand", "Expand / Collapse"),
         ("space", "toggle_expand", "Expand / Collapse"),
         ("q", "quit", "Quit"),
     ]
@@ -50,6 +68,8 @@ class RedisBrowser(App):
     Screen { layout: vertical; }
     #table { height: 1fr; }
     #status { height: 1; padding: 0 1; color: $text-muted; }
+    JobDetailsScreen { align: center middle; }
+    #job-details { width: 90%; height: 85%; border: round $accent; padding: 1 2; background: $surface; overflow-y: auto; }
     #controls {
         height: 1;
         padding: 0 1;
@@ -78,7 +98,7 @@ class RedisBrowser(App):
         yield DataTable(id="table", cursor_type="row", zebra_stripes=True)
         yield Static("Starting…", id="status")
         yield Static(
-            "Enter/Space Expand-Collapse   1 Refresh   2 Pause   3 Slower   4 Faster   Q Quit",
+            "Click/Enter Select   Space Expand-Collapse   1 Refresh   2 Pause   3 Slower   4 Faster   Q Quit",
             id="controls",
         )
 
@@ -140,7 +160,7 @@ class RedisBrowser(App):
                         "1" if status == "PENDING" else "0",
                         "1" if status == "ACTIVE" else "0",
                         "1" if status == "SUSPENDED" else "0",
-                        "1", 2, server_key, False,
+                        "1", 2, server_key, False, dict(job),
                     ))
         return rows
 
@@ -218,6 +238,22 @@ class RedisBrowser(App):
             self.query_one("#status", Static).update(f"Redis error: {exc}")
         finally:
             self._refreshing = False
+
+    async def on_data_table_row_selected(
+        self, event: DataTable.RowSelected
+    ) -> None:
+        """Enter and mouse selection share one handler for hierarchy and jobs."""
+        if not 0 <= event.cursor_row < len(self.last_rows):
+            return
+        self.query_one("#table", DataTable).move_cursor(
+            row=event.cursor_row, column=0, animate=False
+        )
+        row = self.last_rows[event.cursor_row]
+        if row[6] == 2:
+            metadata = row[9] if len(row) > 9 else {}
+            self.push_screen(JobDetailsScreen(row[0], metadata))
+        else:
+            await self.action_toggle_expand()
 
     async def action_toggle_expand(self) -> None:
         table = self.query_one("#table", DataTable)

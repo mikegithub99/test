@@ -17,7 +17,7 @@ The counter columns are always in this order:
 3. Jobs Suspended
 4. Total Jobs
 
-Job rows do not repeat counters; the parent server and server-type rows carry those aggregates. Up/Down arrows move through the entire hierarchy. There are no separate Overview, Jobs, or Raw Keys tabs.
+Each job row contributes 1 to its current status column and 1 to Total Jobs, so the columns remain meaningful at every level. Up/Down arrows move through the entire hierarchy. There are no separate Overview, Jobs, or Raw Keys tabs.
 
 ## Keyboard controls
 

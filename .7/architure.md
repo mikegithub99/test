@@ -29,6 +29,31 @@ Redis Cluster hash tags are deliberate:
 4. **Materialized summaries** hold counts for each server type and each server instance. The UI can read the type summary for an overview, then the server summaries and job details as needed.
 5. **Discovery and health** use a registry of server types/instances and a heartbeat string with TTL. Registration membership is separate from heartbeat freshness; callers should treat the heartbeat as the liveness signal.
 
+### Lua/C++ result-code contract
+
+The lifecycle Lua scripts return application-defined integer codes. These values
+are independent of Redis key names, hash tags, KEYS positions, and ARGV
+positions. Keep the values stable because the C++ RedisJobStatus::Result enum
+uses the same numeric values.
+
+| Code | C++ result | Meaning |
+|---:|---|---|
+| 0 | `Success` | Operation succeeded |
+| 1 | `NoOp` | Requested state is already current (transition only) |
+| 2 | `JobNotFound` | Job does not exist (transition/completion) |
+| 3 | `InvalidTransition` | Requested lifecycle transition is not allowed |
+| 4 | `InconsistentData` | Redis key types, ownership, indexes, state, or counters are inconsistent |
+| 5 | `JobAlreadyExists` | Job key already exists (creation only) |
+| 6 | `Disabled` | Feature is disabled; returned by C++ without invoking Lua |
+
+Lua scripts use named local constants for the codes they return. The server
+registration script is different: it returns the Redis SADD result and uses
+a Redis error reply for wrong key types, rather than the lifecycle result-code
+contract.
+
+Do not renumber existing values. Add new meanings only with an explicit
+C++/Lua contract update and corresponding documentation.
+
 ### Lifecycle operations
 
 - **Create:** create a `PENDING` hash, add its ID to type and server sets, and increment `pending` and `total` counters in both summaries.

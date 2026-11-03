@@ -175,10 +175,15 @@ class RedisBrowser(App):
             else:
                 rows = await asyncio.to_thread(self.load_keys)
 
-            self.last_rows = rows
             table = self.query_one("#table", DataTable)
-            old_key = self.selected_key
+            old_cursor_row = table.cursor_row
+            old_cursor_key = None
+            if 0 <= old_cursor_row < len(self.last_rows):
+                old_cursor_key = self.last_rows[old_cursor_row][0]
+            old_key = old_cursor_key or self.selected_key
             had_focus = table.has_focus
+
+            self.last_rows = rows
             table.clear()
             for key, name, col2, col3 in rows:
                 table.add_row(name, col2, col3, key, key=key)
@@ -189,11 +194,13 @@ class RedisBrowser(App):
                     (index for index, row in enumerate(rows) if row[0] == old_key),
                     None,
                 )
+            if restored_index is None and rows:
+                restored_index = min(old_cursor_row, len(rows) - 1)
 
             if restored_index is not None:
                 table.move_cursor(row=restored_index, column=0, animate=False)
-                self.selected_key = old_key
-                await self.show_details(old_key)
+                self.selected_key = rows[restored_index][0]
+                await self.show_details(self.selected_key)
             else:
                 self.selected_key = None
                 self.query_one("#details", Static).update(

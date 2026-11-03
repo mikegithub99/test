@@ -261,7 +261,7 @@ class RedisBrowser(App):
         if not 0 <= row_index < len(self.last_rows):
             return
         row = self.last_rows[row_index]
-        key, _label, _p, _a, _s, _t, level, _parent, has_children = row
+        key, _label, _p, _a, _s, _t, level, _parent, has_children = row[:9]
         if not has_children:
             return
         if level == 0:

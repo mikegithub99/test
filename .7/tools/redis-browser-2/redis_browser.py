@@ -242,7 +242,8 @@ class RedisBrowser(App):
                 f"{datetime.now().astimezone().strftime('%H:%M:%S %Z')}"
             )
         except Exception as exc:
-            if self.status is not None:\n                self.status.update(f"Redis error: {exc}")
+            if self.status is not None:
+                self.status.update(f"Redis error: {exc}")
         finally:
             self._refreshing = False
 
@@ -263,7 +264,10 @@ class RedisBrowser(App):
             await self.action_toggle_expand()
 
     async def action_toggle_expand(self) -> None:
-        table = self.table\n        if table is None:\n            return\n        row_index = table.cursor_row
+        table = self.table
+        if table is None:
+            return
+        row_index = table.cursor_row
         if not 0 <= row_index < len(self.last_rows):
             return
         row = self.last_rows[row_index]

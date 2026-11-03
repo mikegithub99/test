@@ -237,7 +237,12 @@ class RedisBrowser(App):
             self.last_rows = rows
             table.clear()
             for key, name, col2, col3 in rows:
-                table.add_row(name, col2, col3, key=key)
+                if self.mode == "overview" and self.overview_level == "types":
+                    table.add_row(name, col2, "", key=key)
+                elif self.mode == "jobs":
+                    table.add_row(name, col3, col2, key=key)
+                else:
+                    table.add_row(name, col2, col3, key=key)
 
             restored_index = None
             if old_key:

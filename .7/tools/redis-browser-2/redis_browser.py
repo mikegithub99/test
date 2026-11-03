@@ -109,7 +109,6 @@ class RedisBrowser(App):
                 type_summary_key,
                 server_type,
                 *type_counters,
-                "type",
             ))
 
             server_set_key = f"servers:{{registry}}:type:{server_type}"
@@ -126,7 +125,6 @@ class RedisBrowser(App):
                     server_summary_key,
                     f"  ├─ {server_id}",
                     *server_counters,
-                    "server",
                 ))
 
                 server_jobs_key = (

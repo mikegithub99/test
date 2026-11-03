@@ -114,7 +114,7 @@ class RedisBrowser(App):
         table.clear(columns=True)
         if self.mode == "overview":
             if self.overview_level == "types":
-                table.add_columns("Server Type", "Job Counters", " ")
+                table.add_columns("Server Type", "Job Counters")
             elif self.overview_level == "servers":
                 table.add_columns("Server ID", "Heartbeat", "Job Counters")
             else:
@@ -143,7 +143,7 @@ class RedisBrowser(App):
             "Select a row to inspect its Redis data."
         )
 
-    def overview_back(self) -> None:
+    async def overview_back(self) -> None:
         if self.mode != "overview" or self.overview_level == "types":
             return
         if self.overview_level == "jobs":
@@ -154,7 +154,8 @@ class RedisBrowser(App):
             self.selected_server_type = None
         self.selected_key = None
         self.set_table_columns()
-        self.refresh_view()
+        await self.refresh_view()
+        self.query_one("#table", DataTable).focus()
 
     @on(Button.Pressed)
     async def button_pressed(self, event: Button.Pressed) -> None:
@@ -163,7 +164,7 @@ class RedisBrowser(App):
             await self.refresh_view()
             self.query_one("#table", DataTable).focus()
         elif event.button.id == "back":
-            self.overview_back()
+            await self.overview_back()
         elif event.button.id == "refresh":
             await self.refresh_view()
 
@@ -238,7 +239,7 @@ class RedisBrowser(App):
             table.clear()
             for key, name, col2, col3 in rows:
                 if self.mode == "overview" and self.overview_level == "types":
-                    table.add_row(name, col2, "", key=key)
+                    table.add_row(name, col2, key=key)
                 elif self.mode == "jobs":
                     table.add_row(name, col3, col2, key=key)
                 else:

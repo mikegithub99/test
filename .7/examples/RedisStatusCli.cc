@@ -31,7 +31,7 @@ namespace
 string environmentValue(const char* name, const string& fallback)
 {
   const char* value = getenv(name);
-  return value == nullptr || *value == '\\0' ? fallback : value;
+  return value == nullptr || *value == '\0' ? fallback : value;
 }
 
 long long scanCount()

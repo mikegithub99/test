@@ -97,9 +97,7 @@ class RedisBrowser(App):
         yield Footer()
 
     async def on_mount(self) -> None:
-        self.query_one("#table", DataTable).add_columns(
-            "Name / Job ID", "Type / Server", "Status / Redis type", "Details"
-        )
+        self.set_table_columns()
         self._timer = self.set_interval(self.interval, self.refresh_view)
         await self.refresh_view()
 
@@ -109,8 +107,19 @@ class RedisBrowser(App):
         except Exception:
             pass
 
+    def set_table_columns(self) -> None:
+        table = self.query_one("#table", DataTable)
+        table.clear(columns=True)
+        if self.mode == "overview":
+            table.add_columns("Server Type", "Server ID", "Status / Heartbeat", "Details")
+        elif self.mode == "jobs":
+            table.add_columns("Job ID", "Server Type / Server ID", "Status", "Details")
+        else:
+            table.add_columns("Redis Key", "Type", "Details", "Info")
+
     def set_mode(self, mode: str) -> None:
         self.mode = mode
+        self.set_table_columns()
         for name in ("overview", "jobs", "keys"):
             self.query_one(f"#{name}", Button).variant = (
                 "primary" if name == mode else "default"
@@ -163,7 +172,10 @@ class RedisBrowser(App):
             old_key = self.selected_key
             table.clear()
             for key, name, col2, col3 in rows:
-                table.add_row(name, col2, col3, key, key=key)
+                if self.mode == "overview":
+                    table.add_row(name, col2, col3, key, key=key)
+                else:
+                    table.add_row(name, col2, col3, key, key=key)
 
             if old_key and any(row[0] == old_key for row in rows):
                 self.selected_key = old_key
@@ -190,8 +202,7 @@ class RedisBrowser(App):
             summary = self.client.hgetall(summary_key)
             counts = " ".join(f"{k}={v}" for k, v in sorted(summary.items()))
             rows.append((
-                summary_key, f"[TYPE] {server_type}", "all servers",
-                counts or "No summary",
+                summary_key, server_type, "", counts or "No summary",
             ))
             server_key = f"servers:{{registry}}:type:{server_type}"
             for server_id in sorted(self.client.smembers(server_key)):
@@ -204,7 +215,7 @@ class RedisBrowser(App):
                 )
                 heartbeat = f"heartbeat TTL={ttl}s" if ttl >= 0 else "heartbeat missing"
                 rows.append((
-                    server_summary_key, f"  {server_id}", server_type,
+                    server_summary_key, server_type, server_id,
                     f"{heartbeat}; {server_counts}",
                 ))
         return rows

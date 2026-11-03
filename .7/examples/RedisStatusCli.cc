@@ -51,37 +51,37 @@ long long scanCount()
 void printKey(Redis& redis, const string& key)
 {
   const string type = redis.type(key);
-  cout << "\\n[" << type << "] " << key << '\\n';
+  cout << "\n[" << type << "] " << key << '\n';
 
   if (type == "set")
   {
     vector<string> members;
     redis.smembers(key, std::back_inserter(members));
-    cout << "  members (" << members.size() << "):\\n";
+    cout << "  members (" << members.size() << "):\n";
     for (const auto& member : members)
     {
-      cout << "    " << member << '\\n';
+      cout << "    " << member << '\n';
     }
   }
   else if (type == "hash")
   {
     vector<pair<string, string>> fields;
     redis.hgetall(key, std::back_inserter(fields));
-    cout << "  fields (" << fields.size() << "):\\n";
+    cout << "  fields (" << fields.size() << "):\n";
     for (const auto& field : fields)
     {
-      cout << "    " << field.first << " = " << field.second << '\\n';
+      cout << "    " << field.first << " = " << field.second << '\n';
     }
   }
   else if (type == "string")
   {
     const auto value = redis.get(key);
-    cout << "  value: " << (value ? *value : string("<missing>")) << '\\n';
-    cout << "  TTL: " << redis.ttl(key) << " seconds\\n";
+    cout << "  value: " << (value ? *value : string("<missing>")) << '\n';
+    cout << "  TTL: " << redis.ttl(key) << " seconds\n";
   }
   else
   {
-    cout << "  (value display is currently implemented for SET, HASH, and STRING)\\n";
+    cout << "  (value display is currently implemented for SET, HASH, and STRING)\n";
   }
 }
 } // namespace
@@ -99,9 +99,9 @@ int main()
     const long long count = scanCount();
     size_t keyCount = 0;
 
-    cout << "Redis keyspace inspection\\n"
-         << "URL: " << redisUrl << '\\n'
-         << "Pattern: " << pattern << '\\n';
+    cout << "Redis keyspace inspection\n"
+         << "URL: " << redisUrl << '\n'
+         << "Pattern: " << pattern << '\n';
 
     do
     {
@@ -117,24 +117,24 @@ int main()
         }
         catch (const sw::redis::Error& error)
         {
-          cerr << "\\n[warning] Could not read key '" << key
-               << "': " << error.what() << '\\n';
+          cerr << "\n[warning] Could not read key '" << key
+               << "': " << error.what() << '\n';
         }
       }
     }
     while (cursor != 0);
 
-    cout << "\\nFinished. Read " << keyCount << " keys.\\n";
+    cout << "\nFinished. Read " << keyCount << " keys.\n";
     return EXIT_SUCCESS;
   }
   catch (const sw::redis::Error& error)
   {
-    cerr << "RedisStatusCli: " << error.what() << '\\n';
+    cerr << "RedisStatusCli: " << error.what() << '\n';
     return EXIT_FAILURE;
   }
   catch (const std::exception& error)
   {
-    cerr << "RedisStatusCli: " << error.what() << '\\n';
+    cerr << "RedisStatusCli: " << error.what() << '\n';
     return EXIT_FAILURE;
   }
 }

@@ -169,7 +169,7 @@ class RedisBrowser(App):
         by_key = {row[0]: row for row in all_rows}
         visible = []
         for row in all_rows:
-            key, label, pending, active, suspended, total, level, parent, has_children = row
+            key, label, pending, active, suspended, total, level, parent, has_children = row[:9]
             if level == 0:
                 visible.append(row)
             elif level == 1 and parent in self.expanded_types:

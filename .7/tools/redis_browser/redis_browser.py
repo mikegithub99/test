@@ -178,20 +178,30 @@ class RedisBrowser(App):
             self.last_rows = rows
             table = self.query_one("#table", DataTable)
             old_key = self.selected_key
+            had_focus = table.has_focus
             table.clear()
             for key, name, col2, col3 in rows:
-                if self.mode == "overview":
-                    table.add_row(name, col2, col3, key, key=key)
-                else:
-                    table.add_row(name, col2, col3, key, key=key)
+                table.add_row(name, col2, col3, key, key=key)
 
-            if old_key and any(row[0] == old_key for row in rows):
+            restored_index = None
+            if old_key:
+                restored_index = next(
+                    (index for index, row in enumerate(rows) if row[0] == old_key),
+                    None,
+                )
+
+            if restored_index is not None:
+                table.move_cursor(row=restored_index, column=0, animate=False)
                 self.selected_key = old_key
+                await self.show_details(old_key)
             else:
                 self.selected_key = None
                 self.query_one("#details", Static).update(
                     "Select a row to inspect its Redis data."
                 )
+
+            if had_focus:
+                table.focus()
             self.update_status(
                 f"{len(rows)} rows | Updated "
                 f"{datetime.now().astimezone().strftime('%H:%M:%S %Z')} "

@@ -400,15 +400,8 @@ class RedisBrowser(App):
         await self.refresh_view()
         self.query_one("#table", DataTable).focus()
 
-    async def action_expand_all(self) -> None:
-        self.collapsed = False
-        self.set_mode("overview")
-        await self.refresh_view()
-
-    async def action_collapse_all(self) -> None:
-        self.collapsed = True
-        self.set_mode("overview")
-        await self.refresh_view()
+    async def action_overview_back(self) -> None:
+        await self.overview_back()
 
 
 if __name__ == "__main__":

@@ -144,10 +144,10 @@ class RedisBrowser(App):
                     rows.append((
                         job_key,
                         f"      {branch} {job_id} [{status}]",
-                        "",
-                        "",
-                        "",
-                        "job",
+                        "1" if status == "PENDING" else "0",
+                        "1" if status == "ACTIVE" else "0",
+                        "1" if status == "SUSPENDED" else "0",
+                        "1",
                     ))
 
         return rows

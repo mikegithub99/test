@@ -11,6 +11,7 @@ from typing import Any
 
 import redis
 from redis.cluster import RedisCluster
+from textual import on
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal
 from textual.widgets import Button, DataTable, Footer, Header, Select, Static

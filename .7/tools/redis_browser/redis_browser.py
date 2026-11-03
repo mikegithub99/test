@@ -56,8 +56,8 @@ class RedisBrowser(App):
         ("e", "expand_all", "Expand all"),
         ("c", "collapse_all", "Collapse all"),
         ("q", "quit", "Quit"),
-        {"key": "up", "action": "move_job_row_up", "show": False, "priority": True},
-        {"key": "down", "action": "move_job_row_down", "show": False, "priority": True},
+        ("up", "move_job_row_up", "", False, None, True),
+        ("down", "move_job_row_down", "", False, None, True),
     ]
 
     CSS = """

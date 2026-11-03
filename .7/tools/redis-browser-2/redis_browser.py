@@ -9,6 +9,7 @@ from typing import Any
 
 import redis
 from redis.cluster import RedisCluster
+from textual import events
 from textual.app import App, ComposeResult
 from textual.screen import ModalScreen
 from textual.widgets import DataTable, Footer, Header, Static
@@ -36,6 +37,10 @@ class JobDetailsScreen(ModalScreen[None]):
     """Modal view of every field stored in a selected job hash."""
 
     BINDINGS = [("enter", "dismiss", "Close")]
+
+    def on_click(self, event: events.Click) -> None:
+        """Dismiss the details popup when the user clicks it."""
+        self.dismiss()
 
     def __init__(self, job_key: str, metadata: dict[str, str]) -> None:
         super().__init__()

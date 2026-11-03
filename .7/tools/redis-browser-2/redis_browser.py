@@ -43,8 +43,8 @@ class JobDetailsScreen(ModalScreen[None]):
         self.metadata = metadata
 
     def compose(self) -> ComposeResult:
-        details = "JOB METADATA\\nKey: " + self.job_key + "\\n\\n"
-        details += "\\n".join(
+        details = "JOB METADATA\nKey: " + self.job_key + "\n\n"
+        details += "\n".join(
             f"{name}: {value}" for name, value in sorted(self.metadata.items())
         )
         yield Static(details, id="job-details")

@@ -12,6 +12,7 @@ from redis.cluster import RedisCluster
 from textual.app import App, ComposeResult
 from textual.containers import Horizontal
 from textual.widgets import DataTable, Header, Static
+from rich.text import Text
 
 REFRESH_OPTIONS = (1, 2, 5, 10, 15, 30)
 
@@ -123,7 +124,7 @@ class RedisBrowser(App):
                 )
                 rows.append((
                     server_summary_key,
-                    f"\u00a0\u00a0├─ {server_id}",
+                    f"  SERVER: {server_id}",
                     *server_counters,
                 ))
 
@@ -138,10 +139,9 @@ class RedisBrowser(App):
                         continue
                     job_id = job.get("jobId", reference)
                     status = job.get("status", "UNKNOWN").upper()
-                    branch = "└─" if index == len(references) - 1 else "├─"
                     rows.append((
                         job_key,
-                        f"\u00a0\u00a0\u00a0\u00a0{branch} {job_id} [{status}]",
+                        f"    JOB: {job_id} [{status}]",
                         "1" if status == "PENDING" else "0",
                         "1" if status == "ACTIVE" else "0",
                         "1" if status == "SUSPENDED" else "0",
@@ -176,7 +176,8 @@ class RedisBrowser(App):
                     f"{label:<44} {pending:>7} {active:>7} "
                     f"{suspended:>10} {total:>6}"
                 )
-                table.add_row(display, key=key)
+                # Disable Rich markup parsing so bracketed IDs/status text stay literal.
+                table.add_row(Text(display, markup=False), key=key)
 
             restored_index = None
             if old_cursor_key:

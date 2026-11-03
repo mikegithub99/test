@@ -88,6 +88,8 @@ class RedisBrowser(App):
         self.last_rows = []
         self.expanded_types: set[str] = set()
         self.expanded_servers: set[str] = set()
+        self.table: DataTable | None = None
+        self.status: Static | None = None
 
     @property
     def interval(self) -> int:
@@ -104,6 +106,8 @@ class RedisBrowser(App):
 
     async def on_mount(self) -> None:
         table = self.query_one("#table", DataTable)
+        self.table = table
+        self.status = self.query_one("#status", Static)
         # Keep the hierarchy and counters in one column. Separate DataTable
         # columns can horizontally scroll the hierarchy label out of view on
         # narrower terminals.
@@ -187,7 +191,10 @@ class RedisBrowser(App):
         try:
             all_rows = await asyncio.to_thread(self.load_hierarchy)
             rows = self.visible_hierarchy(all_rows)
-            table = self.query_one("#table", DataTable)
+            table = self.table
+            status_widget = self.status
+            if table is None or status_widget is None:
+                return
             old_cursor_row = table.cursor_row
             old_cursor_key = None
             if 0 <= old_cursor_row < len(self.last_rows):
@@ -230,12 +237,12 @@ class RedisBrowser(App):
                 table.focus()
 
             state = "PAUSED" if self.paused else f"refresh every {self.interval}s"
-            self.query_one("#status", Static).update(
+            status_widget.update(
                 f"{len(rows)} visible rows | {state} | Updated "
                 f"{datetime.now().astimezone().strftime('%H:%M:%S %Z')}"
             )
         except Exception as exc:
-            self.query_one("#status", Static).update(f"Redis error: {exc}")
+            if self.status is not None:\n                self.status.update(f"Redis error: {exc}")
         finally:
             self._refreshing = False
 
@@ -256,8 +263,7 @@ class RedisBrowser(App):
             await self.action_toggle_expand()
 
     async def action_toggle_expand(self) -> None:
-        table = self.query_one("#table", DataTable)
-        row_index = table.cursor_row
+        table = self.table\n        if table is None:\n            return\n        row_index = table.cursor_row
         if not 0 <= row_index < len(self.last_rows):
             return
         row = self.last_rows[row_index]

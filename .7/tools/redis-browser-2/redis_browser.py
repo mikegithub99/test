@@ -79,13 +79,13 @@ class RedisBrowser(App):
 
     async def on_mount(self) -> None:
         table = self.query_one("#table", DataTable)
-        # Explicit widths keep the hierarchy labels visible instead of
-        # allowing the counter columns to consume the available table space.
-        table.add_column("Server Type / Server / Job", width=56, key="item")
-        table.add_column("Jobs Pending", width=13, key="pending")
-        table.add_column("Jobs Active", width=13, key="active")
-        table.add_column("Jobs Suspended", width=16, key="suspended")
-        table.add_column("Total Jobs", width=11, key="total")
+        # Keep the hierarchy and counters in one column. Separate DataTable
+        # columns can horizontally scroll the hierarchy label out of view on
+        # narrower terminals.
+        table.add_column(
+            "Hierarchy                                      Pending  Active  Suspended  Total",
+            key="display",
+        )
         self._timer = self.set_interval(self.interval, self.refresh_view)
         table.focus()
         await self.refresh_view()
@@ -172,9 +172,11 @@ class RedisBrowser(App):
                 if len(values) < 6:
                     values += ("0",) * (6 - len(values))
                 key, label, pending, active, suspended, total = values
-                table.add_row(
-                    label, pending, active, suspended, total, key=key
+                display = (
+                    f"{label:<44} {pending:>7} {active:>7} "
+                    f"{suspended:>10} {total:>6}"
                 )
+                table.add_row(display, key=key)
 
             restored_index = None
             if old_cursor_key:

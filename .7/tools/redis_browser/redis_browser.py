@@ -53,8 +53,7 @@ class RedisBrowser(App):
         ("1", "show_overview", "Overview"),
         ("2", "show_jobs", "Jobs"),
         ("3", "show_keys", "Raw keys"),
-        ("e", "expand_all", "Expand all"),
-        ("c", "collapse_all", "Collapse all"),
+        ("escape", "overview_back", "Back"),
         ("q", "quit", "Quit"),
     ]
 
@@ -79,7 +78,9 @@ class RedisBrowser(App):
         self.last_rows: list[tuple[str, str, str, str]] = []
         self._refreshing = False
         self._timer = None
-        self.collapsed = False
+        self.overview_level = "types"
+        self.selected_server_type = None
+        self.selected_server_id = None
 
     def compose(self) -> ComposeResult:
         yield Header()
@@ -88,6 +89,7 @@ class RedisBrowser(App):
             yield Button("Overview", id="overview", variant="primary")
             yield Button("Jobs", id="jobs")
             yield Button("Raw keys", id="keys")
+            yield Button("Back", id="back", disabled=True)
             yield Static("Every:", id="refresh-label")
             yield Select(REFRESH_OPTIONS, value=2, allow_blank=False, id="interval")
             yield Button("Refresh", id="refresh")
@@ -111,14 +113,26 @@ class RedisBrowser(App):
         table = self.query_one("#table", DataTable)
         table.clear(columns=True)
         if self.mode == "overview":
-            table.add_columns("Server Type", "Server ID", "Status / Heartbeat")
+            if self.overview_level == "types":
+                table.add_columns("Server Type", "Job Counters", " ")
+            elif self.overview_level == "servers":
+                table.add_columns("Server ID", "Heartbeat", "Job Counters")
+            else:
+                table.add_columns("Job ID", "Status", "Server")
         elif self.mode == "jobs":
             table.add_columns("Job ID", "Server Type / Server ID", "Status")
         else:
             table.add_columns("Redis Key", "Type", "Details")
+        self.query_one("#back", Button).disabled = not (
+            self.mode == "overview" and self.overview_level != "types"
+        )
 
     def set_mode(self, mode: str) -> None:
         self.mode = mode
+        if mode == "overview":
+            self.overview_level = "types"
+            self.selected_server_type = None
+            self.selected_server_id = None
         self.set_table_columns()
         for name in ("overview", "jobs", "keys"):
             self.query_one(f"#{name}", Button).variant = (
@@ -128,6 +142,19 @@ class RedisBrowser(App):
         self.query_one("#details", Static).update(
             "Select a row to inspect its Redis data."
         )
+
+    def overview_back(self) -> None:
+        if self.mode != "overview" or self.overview_level == "types":
+            return
+        if self.overview_level == "jobs":
+            self.overview_level = "servers"
+            self.selected_server_id = None
+        else:
+            self.overview_level = "types"
+            self.selected_server_type = None
+        self.selected_key = None
+        self.set_table_columns()
+        self.refresh_view()
 
     @on(Button.Pressed)
     async def button_pressed(self, event: Button.Pressed) -> None:

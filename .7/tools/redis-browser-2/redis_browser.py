@@ -35,7 +35,7 @@ def counter_values(summary: dict[str, str]) -> tuple[str, str, str, str]:
 class JobDetailsScreen(ModalScreen[None]):
     """Modal view of every field stored in a selected job hash."""
 
-    BINDINGS = [("escape", "dismiss", "Close")]
+    BINDINGS = [("enter", "dismiss", "Close")]
 
     def __init__(self, job_key: str, metadata: dict[str, str]) -> None:
         super().__init__()

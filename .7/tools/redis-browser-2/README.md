@@ -24,7 +24,7 @@ Each job row contributes 1 to its current status column and 1 to Total Jobs, so 
 | 3 | Slow automatic refresh |
 | 4 | Speed up automatic refresh |
 | Up / Down | Move through the visible hierarchy |
-| Enter / Space | Expand or collapse the selected server type or server |
+| Space | Expand or collapse the selected server type or server |
 | q | Quit |
 
 Automatic refresh starts at 2 seconds. The interval can be adjusted through 1, 2, 5, 10, 15, and 30 seconds. Manual refresh works while paused. Refresh retains the selected row when that Redis key still exists. Expanded/collapsed state is retained across refreshes.

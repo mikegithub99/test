@@ -177,7 +177,7 @@ class RedisBrowser(App):
                     f"{suspended:>10} {total:>6}"
                 )
                 # Disable Rich markup parsing so bracketed IDs/status text stay literal.
-                table.add_row(Text(display, markup=False), key=key)
+                table.add_row(Text(display), key=key)
 
             restored_index = None
             if old_cursor_key:

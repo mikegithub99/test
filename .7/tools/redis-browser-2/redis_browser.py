@@ -287,8 +287,9 @@ class RedisBrowser(App):
             collapse_key = parent
             collapse_level = 1
         elif level == 1:
-            collapse_key = key
-            collapse_level = 1
+            # Escape on any server row returns to the server-type level.
+            collapse_key = parent
+            collapse_level = 0
         else:
             collapse_key = key
             collapse_level = 0

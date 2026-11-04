@@ -117,7 +117,7 @@ class RedisBrowser(App):
         # columns can horizontally scroll the hierarchy label out of view on
         # narrower terminals.
         table.add_column(
-            f"{'Hierarchy':<52}{'Pending':>7} {'Active':>7} {'Suspended':>10} {'Total':>6}",
+            f"{'Hierarchy':<62}{'Pending':>7} {'Active':>7} {'Suspended':>10} {'Total':>6}",
             key="display",
         )
         self._timer = self.set_interval(self.interval, self.refresh_view)
@@ -223,7 +223,7 @@ class RedisBrowser(App):
                 # every hierarchy depth.
                 item_label = f"{'  ' * level}{marker} {label}"
                 display = (
-                    f"{item_label:<52.52}"
+                    f"{item_label:<62.62}"
                     f"{pending:>7} {active:>7} {suspended:>10} {total:>6}"
                 )
                 table.add_row(Text(display), key=key)

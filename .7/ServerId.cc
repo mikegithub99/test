@@ -51,7 +51,7 @@ string hostIPv4()
 
 string randomFiveLetters()
 {
-  static constexpr char alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  static constexpr char alphabet[] = "abcdefghijklmnopqrstuvwxyz";
   random_device random;
   uniform_int_distribution<int> choose(0, 25);
 

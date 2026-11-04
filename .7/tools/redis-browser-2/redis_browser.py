@@ -65,6 +65,7 @@ class RedisBrowser(App):
         ("2", "toggle_pause", "Pause / Resume"),
         ("3", "slower", "Slower"),
         ("4", "faster", "Faster"),
+        ("h", "toggle_help", "Help"),
         ("space", "toggle_expand", "Expand / Collapse"),
         ("escape", "collapse", "Collapse"),
         ("q", "quit", "Quit"),
@@ -89,6 +90,7 @@ class RedisBrowser(App):
         self.client = make_client()
         self.interval_index = REFRESH_OPTIONS.index(2)
         self.paused = False
+        self.help_visible = True
         self._refreshing = False
         self._timer = None
         self.last_rows = []
@@ -349,6 +351,14 @@ class RedisBrowser(App):
         self._timer = None
         if not self.paused:
             self._timer = self.set_interval(self.interval, self.refresh_view)
+
+    async def action_toggle_help(self) -> None:
+        """Hide or show the bottom status and keyboard-help lines."""
+        self.help_visible = not self.help_visible
+        if self.status is not None:
+            self.status.display = self.help_visible
+        controls = self.query_one("#controls", Static)
+        controls.display = self.help_visible
 
     async def action_refresh_now(self) -> None:
         await self.refresh_view()

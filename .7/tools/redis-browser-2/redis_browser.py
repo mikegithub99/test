@@ -66,6 +66,7 @@ class RedisBrowser(App):
         ("3", "slower", "Slower"),
         ("4", "faster", "Faster"),
         ("space", "toggle_expand", "Expand / Collapse"),
+        ("escape", "collapse", "Collapse"),
         ("q", "quit", "Quit"),
     ]
 
@@ -105,7 +106,7 @@ class RedisBrowser(App):
         yield DataTable(id="table", cursor_type="row", zebra_stripes=True)
         yield Static("Starting…", id="status")
         yield Static(
-            "Click/Enter Select   Space Expand-Collapse   1 Refresh   2 Pause   3 Slower   4 Faster   Q Quit",
+            "Click/Enter Select   Space Expand   Esc Collapse   1 Refresh   2 Pause   3 Slower   4 Faster   Q Quit",
             id="controls",
         )
 
@@ -267,6 +268,52 @@ class RedisBrowser(App):
             self.push_screen(JobDetailsScreen(row[0], metadata))
         else:
             await self.action_toggle_expand()
+
+    async def action_collapse(self) -> None:
+        """Collapse the selected hierarchy level, or its parent when on a job."""
+        table = self.table
+        if table is None:
+            return
+        row_index = table.cursor_row
+        if not 0 <= row_index < len(self.last_rows):
+            return
+
+        row = self.last_rows[row_index]
+        key, _label, _p, _a, _s, _t, level, parent, _has_children = row[:9]
+
+        if level == 2:
+            # A job row collapses its containing server, avoiding the need to
+            # navigate back through a long list of jobs.
+            collapse_key = parent
+            collapse_level = 1
+        elif level == 1:
+            collapse_key = key
+            collapse_level = 1
+        else:
+            collapse_key = key
+            collapse_level = 0
+
+        if collapse_level == 1:
+            if collapse_key not in self.expanded_servers:
+                return
+            self.expanded_servers.discard(collapse_key)
+        else:
+            if collapse_key not in self.expanded_types:
+                return
+            self.expanded_types.discard(collapse_key)
+            # Also clear expansion state for servers under this type.
+            for child in self.last_rows:
+                if child[6] == 1 and child[7] == collapse_key:
+                    self.expanded_servers.discard(child[0])
+
+        # Move the cursor to the row that will remain visible after collapse.
+        parent_index = next(
+            (i for i, item in enumerate(self.last_rows) if item[0] == collapse_key),
+            None,
+        )
+        if parent_index is not None:
+            table.move_cursor(row=parent_index, column=0, animate=False)
+        await self.refresh_view()
 
     async def action_toggle_expand(self) -> None:
         table = self.table

@@ -56,16 +56,30 @@ class JobDetailsScreen(ModalScreen[None]):
         yield Footer()
 
 
+class DeleteConfirmScreen(ModalScreen[bool]):
+    BINDINGS = [("y", "confirm", "Delete"), ("n", "cancel", "Cancel"), ("escape", "cancel", "Cancel")]
+    CSS = """DeleteConfirmScreen { align: center middle; } #delete-confirm { width: 80%; height: auto; border: round $error; padding: 1 2; background: $surface; }"""
+    def __init__(self, title: str, description: str) -> None:
+        super().__init__()
+        self.title_text, self.description = title, description
+    def compose(self) -> ComposeResult:
+        yield Static(f"DELETE CONFIRMATION\\n\\n{self.title_text}\\n\\n{self.description}\\n\\nPress Y to delete, N or Esc to cancel.", id="delete-confirm")
+    def action_confirm(self) -> None:
+        self.dismiss(True)
+    def action_cancel(self) -> None:
+        self.dismiss(False)
+
+
 class RedisBrowser(App):
     TITLE = "Redis Job Counters (.7)"
-    SUB_TITLE = "Live hierarchy | read-only"
+    SUB_TITLE = "Live hierarchy | D deletes with confirmation"
 
     BINDINGS = [
         ("1", "refresh_now", "Refresh"),
         ("2", "toggle_pause", "Pause / Resume"),
         ("3", "slower", "Slower"),
         ("4", "faster", "Faster"),
-        ("h", "toggle_help", "Help"),
+        ("h", "toggle_help", "Help"),\n        ("d", "delete_selected", "Delete"),
         ("space", "toggle_expand", "Expand / Collapse"),
         ("escape", "collapse", "Collapse"),
         ("q", "quit", "Quit"),
@@ -108,7 +122,7 @@ class RedisBrowser(App):
         yield DataTable(id="table", cursor_type="row", zebra_stripes=True)
         yield Static("Starting…", id="status")
         yield Static(
-            "Click/Enter Select   Space Expand   Esc Collapse   1 Refresh   2 Pause   3 Slower   4 Faster   Q Quit",
+            "Click/Enter Select   Space Expand   Esc Collapse   D Delete   1 Refresh   2 Pause   3 Slower   4 Faster   Q Quit",
             id="controls",
         )
 
@@ -317,6 +331,92 @@ class RedisBrowser(App):
         if parent_index is not None:
             table.move_cursor(row=parent_index, column=0, animate=False)
         await self.refresh_view()
+
+    async def action_delete_selected(self) -> None:
+        table = self.table
+        if table is None or not 0 <= table.cursor_row < len(self.last_rows):
+            return
+        row = self.last_rows[table.cursor_row]
+        key, label, level = row[0], row[1], row[6]
+        metadata = dict(row[9]) if level == 2 and len(row) > 9 else {}
+        if level == 0:
+            title, description = f"Server type: {label}", "Delete all servers, jobs, summaries, indexes, heartbeats, and registry entries for this type?"
+        elif level == 1:
+            title = f"Server ID: {label.removeprefix('SERVER: ')}"
+            description = "Delete this server's jobs, summary, heartbeat, job index, and registry membership?"
+        elif level == 2:
+            title = f"Job: {metadata.get('jobId', label)}"
+            description = "Delete this job hash and both index references, and decrement server and type counters?"
+        else:
+            return
+        self.push_screen(DeleteConfirmScreen(title, description), callback=lambda confirmed: self._finish_delete(confirmed, key, level, metadata))
+
+    async def _finish_delete(self, confirmed: bool, key: str, level: int, metadata: dict[str, str]) -> None:
+        if not confirmed:
+            return
+        try:
+            if level == 2:
+                await asyncio.to_thread(self._delete_job, key, metadata)
+            elif level == 1:
+                await asyncio.to_thread(self._delete_server, key)
+            else:
+                await asyncio.to_thread(self._delete_server_type, key[len("summary:type:{"):-1])
+            await self.refresh_view()
+        except Exception as exc:
+            if self.status is not None:
+                self.status.update(f"Delete failed: {exc}")
+
+    def _delete_job(self, job_key: str, metadata: dict[str, str]) -> None:
+        server_type, server_id = metadata.get("serverType"), metadata.get("serverId")
+        state = metadata.get("status", "").lower()
+        if not server_type or not server_id or state not in {"pending", "active", "suspended"}:
+            raise ValueError("Job metadata incomplete; refusing deletion.")
+        prefix = f"job:{{{server_type}}}:"
+        if not job_key.startswith(prefix):
+            raise ValueError("Job key does not match its metadata.")
+        reference = job_key[len(prefix):]
+        if not self.client.exists(job_key):
+            return
+        for summary in (f"summary:type:{{{server_type}}}", f"summary:server:{{{server_type}}}:{server_id}"):
+            if self.client.exists(summary):
+                self.client.hincrby(summary, state, -1)
+                self.client.hincrby(summary, "total", -1)
+        self.client.srem(f"jobs:type:{{{server_type}}}", reference)
+        self.client.srem(f"jobs:server:{{{server_type}}}:{server_id}", reference)
+        self.client.delete(job_key)
+
+    def _delete_server(self, summary_key: str) -> None:
+        prefix = "summary:server:{"
+        if not summary_key.startswith(prefix) or "}:" not in summary_key:
+            raise ValueError("Invalid server summary key.")
+        server_type, server_id = summary_key[len(prefix):].split("}:", 1)
+        server_jobs, type_jobs = f"jobs:server:{{{server_type}}}:{server_id}", f"jobs:type:{{{server_type}}}"
+        type_summary = f"summary:type:{{{server_type}}}"
+        counts = {"pending": 0, "active": 0, "suspended": 0, "total": 0}
+        for reference in list(self.client.smembers(server_jobs)):
+            job_key = f"job:{{{server_type}}}:{reference}"
+            state = self.client.hget(job_key, "status")
+            if state and state.lower() in counts:
+                counts[state.lower()] += 1
+                counts["total"] += 1
+            self.client.delete(job_key)
+            self.client.srem(type_jobs, reference)
+        if self.client.exists(type_summary):
+            for field, amount in counts.items():
+                if amount:
+                    self.client.hincrby(type_summary, field, -amount)
+        self.client.delete(server_jobs, summary_key, f"heartbeat:server:{{{server_type}}}:{server_id}")
+        self.client.srem(f"servers:{{registry}}:type:{server_type}", server_id)
+
+    def _delete_server_type(self, server_type: str) -> None:
+        server_set = f"servers:{{registry}}:type:{server_type}"
+        for server_id in list(self.client.smembers(server_set)):
+            self._delete_server(f"summary:server:{{{server_type}}}:{server_id}")
+        type_jobs = f"jobs:type:{{{server_type}}}"
+        for reference in list(self.client.smembers(type_jobs)):
+            self.client.delete(f"job:{{{server_type}}}:{reference}")
+        self.client.delete(type_jobs, f"summary:type:{{{server_type}}}", server_set)
+        self.client.srem("servers:{registry}:types", server_type)
 
     async def action_toggle_expand(self) -> None:
         table = self.table

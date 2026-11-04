@@ -4,18 +4,13 @@
  */
 
 #include "RedisJobStatus.h"
-
-#include <arpa/inet.h>
-#include <ifaddrs.h>
-#include <net/if.h>
-#include <sys/socket.h>
+#include "ServerId.h"
 
 #include <atomic>
 #include <chrono>
 #include <csignal>
 #include <cstdlib>
 #include <iostream>
-#include <random>
 #include <stdexcept>
 #include <string>
 #include <thread>
@@ -27,10 +22,8 @@ using std::cout;
 using std::exception;
 using std::int64_t;
 using std::invalid_argument;
-using std::random_device;
 using std::string;
 using std::this_thread;
-using std::uniform_int_distribution;
 
 
 namespace
@@ -45,48 +38,6 @@ void onSignal(int)
 void initializeApplicationConfiguration()
 {
   // TODO: initialize the host application's configuration registry before constructing RedisJobStatus.
-}
-
-string hostIPv4()
-{
-  ifaddrs* interfaces = nullptr;
-  if (getifaddrs(&interfaces) != 0)
-  {
-    return "127.0.0.1";
-  }
-
-  string result = "127.0.0.1";
-  for (const ifaddrs* item = interfaces; item; item = item->ifa_next)
-  {
-    if (!item->ifa_addr || item->ifa_addr->sa_family != AF_INET ||
-        (item->ifa_flags & IFF_LOOPBACK))
-    {
-      continue;
-    }
-
-    char text[INET_ADDRSTRLEN] = {};
-    const auto* address = reinterpret_cast<const sockaddr_in*>(item->ifa_addr);
-    if (inet_ntop(AF_INET, &address->sin_addr, text, sizeof(text)))
-    {
-      result = text;
-      break;
-    }
-  }
-  freeifaddrs(interfaces);
-  return result;
-}
-
-string randomFiveLetters()
-{
-  static constexpr char alphabet[] = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
-  random_device rd;
-  uniform_int_distribution<int> choose(0, 25);
-  string suffix;
-  for (int i = 0; i < 5; ++i)
-  {
-    suffix.push_back(alphabet[choose(rd)]);
-  }
-  return suffix;
 }
 
 string parseServerType(int argc, char** argv)
@@ -112,7 +63,7 @@ int main(int argc, char** argv)
     const auto serverType = parseServerType(argc, argv);
     initializeApplicationConfiguration();
 
-    const auto serverId = hostIPv4() + "-" + randomFiveLetters();
+    const auto serverId = makeServerId();
     RedisJobStatus status([serverType, serverId]
     {
       return RedisJobStatus::Config{true, serverType, serverId};
